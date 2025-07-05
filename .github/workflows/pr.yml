@@ -48,11 +48,61 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for Nx affected detection
 
-    - name: Run CodeQL Analysis
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Restore .NET dependencies
+      run: npx nx g @nx-dotnet/core:restore
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Cache Nx
+      uses: actions/cache@v4
+      with:
+        path: .nx/cache
+        key: ${{ runner.os }}-nx-${{ hashFiles('**/nx.json') }}
+        restore-keys: |
+          ${{ runner.os }}-nx-
+
+    - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
       with:
         languages: csharp
+
+    - name: Build all projects for CodeQL analysis
+      run: |
+        echo "Building all .NET projects for security analysis..."
+        
+        # Build all projects in the solution using Nx
+        # This ensures proper dependency order and builds all projects
+        npx nx run-many --target=build --all --configuration=Release
+        
+        if [ $? -ne 0 ]; then
+          echo "❌ Build failed - cannot proceed with security analysis"
+          exit 1
+        fi
+        
+        echo "✅ All projects built successfully for CodeQL analysis"
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
@@ -68,6 +118,26 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Restore .NET dependencies
+      run: npx nx g @nx-dotnet/core:restore
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
 
     - name: Check for vulnerable packages
       run: |

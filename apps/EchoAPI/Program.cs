@@ -37,7 +37,7 @@ app.MapPost("/echo", ([FromBody] EchoRequest request, EchoService echoService, H
     {
         return Results.BadRequest("Message is required");
     }
-    
+
     return Results.Ok(echoService.ProcessEchoRequest(request, context.Request.Method));
 })
 .WithName("PostEcho")
@@ -50,7 +50,7 @@ app.MapPut("/echo/{message}", (string message, [FromQuery] int count, EchoServic
     {
         return Results.BadRequest("Count must be between 1 and 10");
     }
-    
+
     return Results.Ok(echoService.EchoWithDetails(message, count));
 })
 .WithName("PutEchoWithCount")
