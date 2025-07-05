@@ -103,7 +103,7 @@ jobs:
         deletions=${{ github.event.pull_request.deletions }}
         total_changes=$((additions + deletions))
         
-        echo "PR changes: +$additions -$deletions (total: $total_changes)"
+        .
         
         if [ $total_changes -gt 1000 ]; then
           echo "⚠️  Large PR detected ($total_changes changes)"
@@ -124,19 +124,46 @@ jobs:
         echo "## Pull Request Validation Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
-        # Define jobs to check
-        jobs=("validate-pr" "check-conflicts" "dependency-check" "code-quality" "size-check")
+        # Check each job result individually
+        if [ "${{ needs.validate-pr.result }}" = "success" ]; then
+          echo "✅ validate-pr passed" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.validate-pr.result }}" = "failure" ]; then
+          echo "❌ validate-pr failed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️  validate-pr was skipped" >> $GITHUB_STEP_SUMMARY
+        fi
         
-        for job in "${jobs[@]}"; do
-          result="${{ needs.$job.result }}"
-          if [ "$result" = "success" ]; then
-            echo "✅ $job passed" >> $GITHUB_STEP_SUMMARY
-          elif [ "$result" = "failure" ]; then
-            echo "❌ $job failed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⚠️  $job was skipped" >> $GITHUB_STEP_SUMMARY
-          fi
-        done
+        if [ "${{ needs.check-conflicts.result }}" = "success" ]; then
+          echo "✅ check-conflicts passed" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.check-conflicts.result }}" = "failure" ]; then
+          echo "❌ check-conflicts failed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️  check-conflicts was skipped" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.dependency-check.result }}" = "success" ]; then
+          echo "✅ dependency-check passed" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.dependency-check.result }}" = "failure" ]; then
+          echo "❌ dependency-check failed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️  dependency-check was skipped" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.code-quality.result }}" = "success" ]; then
+          echo "✅ code-quality passed" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.code-quality.result }}" = "failure" ]; then
+          echo "❌ code-quality failed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️  code-quality was skipped" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.size-check.result }}" = "success" ]; then
+          echo "✅ size-check passed" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.size-check.result }}" = "failure" ]; then
+          echo "❌ size-check failed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️  size-check was skipped" >> $GITHUB_STEP_SUMMARY
+        fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "---" >> $GITHUB_STEP_SUMMARY
