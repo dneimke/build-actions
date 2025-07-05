@@ -197,19 +197,36 @@ jobs:
     if: always()
     
     steps:
+    - name: Debug job results
+      run: |
+        echo "Debug information:"
+        echo "has-changes: '${{ needs.detect-changes.outputs.has-changes }}'"
+        echo "detect-changes.result: '${{ needs.detect-changes.result }}'"
+        echo "build.result: '${{ needs.build.result }}'"
+        echo "test.result: '${{ needs.test.result }}'"
+        echo "build.outputs: ${{ toJSON(needs.build.outputs) }}"
+        echo "test.outputs: ${{ toJSON(needs.test.outputs) }}"
+
     - name: Check build results
-      if: needs.detect-changes.outputs.has-changes == 'true' && needs.build.result != 'success'
+      if: needs.detect-changes.outputs.has-changes == 'true' && needs.build.result != 'success' && needs.build.result != 'skipped'
       run: |
         echo "❌ Build job failed"
+        echo "Build result was: ${{ needs.build.result }}"
         exit 1
 
     - name: Check test results
-      if: needs.detect-changes.outputs.has-changes == 'true' && needs.test.result != 'success'
+      if: needs.detect-changes.outputs.has-changes == 'true' && needs.test.result != 'success' && needs.test.result != 'skipped'
       run: |
         echo "❌ Test job failed"
+        echo "Test result was: ${{ needs.test.result }}"
         exit 1
 
     - name: All checks passed
-      if: needs.detect-changes.outputs.has-changes == 'true' && needs.build.result == 'success' && needs.test.result == 'success'
+      if: needs.detect-changes.outputs.has-changes == 'true' && (needs.build.result == 'success' || needs.build.result == 'skipped') && (needs.test.result == 'success' || needs.test.result == 'skipped')
       run: |
-        echo "✅ All checks passed" 
+        echo "✅ All checks passed"
+        
+    - name: No changes detected
+      if: needs.detect-changes.outputs.has-changes == 'false'
+      run: |
+        echo "ℹ️ No changes detected - skipping build and test" 

@@ -79,18 +79,28 @@ function Build-ProjectMatrix {
         [array]$Projects
     )
     
-    $matrix = @{
-        include = @()
-    }
+    $projectArray = @()
     
     foreach ($project in $Projects) {
+        $projectPath = Get-ProjectPath -ProjectName $project
+        
+        # Skip projects that don't have a valid path (like directory names)
+        if ($null -eq $projectPath) {
+            Write-Host "Skipping project without valid path: $project"
+            continue
+        }
+        
         $projectInfo = @{
             name = $project
-            path = Get-ProjectPath -ProjectName $project
+            path = $projectPath
             type = Get-ProjectType -ProjectName $project
         }
         
-        $matrix.include += $projectInfo
+        $projectArray += $projectInfo
+    }
+    
+    $matrix = @{
+        include = $projectArray
     }
     
     return $matrix
@@ -101,6 +111,12 @@ function Get-ProjectPath {
     param(
         [string]$ProjectName
     )
+    
+    # Skip directory names that aren't actual projects
+    if ($ProjectName -eq "libs" -or $ProjectName -eq "apps") {
+        Write-Host "Skipping directory: $ProjectName"
+        return $null
+    }
     
     $configPath = ".github/config/deployment-config.json"
     if (Test-Path $configPath) {
@@ -163,6 +179,15 @@ Write-Host "Affected projects: $($affectedProjects -join ', ')"
 # Build matrix for GitHub Actions
 $matrix = Build-ProjectMatrix -Projects $affectedProjects
 $matrixJson = $matrix | ConvertTo-Json -Depth 10 -Compress
+
+# Check if the matrix has any projects after filtering
+if ($matrix.include.Count -eq 0) {
+    Write-Host "No valid projects found after filtering"
+    Write-GitHubOutput -Name "has-changes" -Value "false"
+    Write-GitHubOutput -Name "matrix" -Value '{"include":[]}'
+    Write-GitHubOutput -Name "affected-projects" -Value ""
+    exit 0
+}
 
 Write-GitHubOutput -Name "has-changes" -Value "true"
 Write-GitHubOutput -Name "matrix" -Value $matrixJson
