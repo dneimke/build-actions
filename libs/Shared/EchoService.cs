@@ -35,4 +35,9 @@ public class EchoService
 
         return $"Echo [{method}]: {message}";
     }
+
+    public string GetTimestamp()
+    {
+        return $"Current timestamp: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+    }
 }
