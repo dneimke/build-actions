@@ -1,6 +1,0 @@
-# Centralized variables for GitHub Actions workflows
-variables:
-  DOTNET_VERSION: '8.0.x'
-  NODE_VERSION: '18'
-  TARGET_BRANCHES: '[ main, develop ]'
-  PR_TYPES: '[ opened, synchronize, reopened ]' 
