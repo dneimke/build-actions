@@ -100,7 +100,7 @@ function Build-ProjectMatrix {
     }
     
     $matrix = @{
-        project = $projectArray
+        include = $projectArray
     }
     
     return $matrix
@@ -170,7 +170,7 @@ $affectedProjects = Get-AffectedProjects -BaseBranch $BaseBranch -HeadBranch $He
 if ($affectedProjects.Count -eq 0) {
     Write-Host "No affected projects found"
     Write-GitHubOutput -Name "has-changes" -Value "false"
-    Write-GitHubOutput -Name "matrix" -Value '{"project":[]}'
+    Write-GitHubOutput -Name "matrix" -Value '{"include":[]}'
     exit 0
 }
 
@@ -179,6 +179,15 @@ Write-Host "Affected projects: $($affectedProjects -join ', ')"
 # Build matrix for GitHub Actions
 $matrix = Build-ProjectMatrix -Projects $affectedProjects
 $matrixJson = $matrix | ConvertTo-Json -Depth 10 -Compress
+
+# Check if the matrix has any projects after filtering
+if ($matrix.include.Count -eq 0) {
+    Write-Host "No valid projects found after filtering"
+    Write-GitHubOutput -Name "has-changes" -Value "false"
+    Write-GitHubOutput -Name "matrix" -Value '{"include":[]}'
+    Write-GitHubOutput -Name "affected-projects" -Value ""
+    exit 0
+}
 
 Write-GitHubOutput -Name "has-changes" -Value "true"
 Write-GitHubOutput -Name "matrix" -Value $matrixJson
