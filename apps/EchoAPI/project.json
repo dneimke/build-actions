@@ -32,10 +32,16 @@
       }
     },
     "test": {
-      "executor": "@nx-dotnet/core:test",
+      "executor": "nx:run-commands",
       "options": {
-        "configuration": "Debug",
-        "project": "apps/EchoAPI/EchoAPI.csproj"
+        "command": "dotnet test apps/EchoAPI/EchoAPI.csproj --configuration Debug"
+      },
+      "configurations": {
+        "production": {
+          "options": {
+            "command": "dotnet test apps/EchoAPI/EchoAPI.csproj --configuration Release"
+          }
+        }
       }
     }
   },

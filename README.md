@@ -62,6 +62,7 @@ The API will be available at:
 
 Once the server is running, you can test the endpoints:
 
+#### Using curl (Bash/Git Bash)
 ```bash
 # Test GET endpoint
 curl "https://localhost:7001/echo/hello"
@@ -76,6 +77,44 @@ curl -X PUT "https://localhost:7001/echo/test?count=3"
 
 # Test DELETE endpoint
 curl -X DELETE "https://localhost:7001/echo/goodbye"
+```
+
+#### Using PowerShell
+```powershell
+# Test GET endpoint
+Invoke-RestMethod -Uri "https://localhost:7001/echo/hello" -Method Get
+
+# Test POST endpoint
+$body = @{
+    message = "hello world"
+    uppercase = $true
+} | ConvertTo-Json
+Invoke-RestMethod -Uri "https://localhost:7001/echo" -Method Post -Body $body -ContentType "application/json"
+
+# Test PUT endpoint
+Invoke-RestMethod -Uri "https://localhost:7001/echo/test?count=3" -Method Put
+
+# Test DELETE endpoint
+Invoke-RestMethod -Uri "https://localhost:7001/echo/goodbye" -Method Delete
+```
+
+#### Alternative PowerShell Commands (if Invoke-RestMethod fails due to SSL)
+```powershell
+# Test GET endpoint (bypass SSL verification for development)
+Invoke-RestMethod -Uri "https://localhost:7001/echo/hello" -Method Get -SkipCertificateCheck
+
+# Test POST endpoint (bypass SSL verification for development)
+$body = @{
+    message = "hello world"
+    uppercase = $true
+} | ConvertTo-Json
+Invoke-RestMethod -Uri "https://localhost:7001/echo" -Method Post -Body $body -ContentType "application/json" -SkipCertificateCheck
+
+# Test PUT endpoint (bypass SSL verification for development)
+Invoke-RestMethod -Uri "https://localhost:7001/echo/test?count=3" -Method Put -SkipCertificateCheck
+
+# Test DELETE endpoint (bypass SSL verification for development)
+Invoke-RestMethod -Uri "https://localhost:7001/echo/goodbye" -Method Delete -SkipCertificateCheck
 ```
 
 ## 📁 Project Structure
