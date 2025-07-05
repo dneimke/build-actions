@@ -1,8 +1,12 @@
 name: CD - Deploy to Environments
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI - Build and Test"]
     branches: [ main ]
+    types: [completed]
+    # Only trigger on successful CI runs
+    branches-ignore: []
   workflow_dispatch:
     inputs:
       environment:
@@ -39,10 +43,10 @@ jobs:
       id: config
       uses: ./.github/actions/load-config
 
-  # Job to determine what to deploy (for automatic deployments)
-  # Job to determine what to deploy (for automatic deployments)
-  detect-changes:
-    if: github.event_name != 'workflow_dispatch'
+  # Unified job to determine what to deploy
+  determine-changes:
+    needs: load-config
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       has-changes: ${{ steps.get-affected.outputs.has-changes }}
@@ -54,6 +58,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Required for Nx affected detection
+        ref: ${{ github.event.workflow_run.head_branch || github.ref }}
 
     - name: Setup environment
       uses: ./.github/actions/setup-environment
@@ -61,59 +66,46 @@ jobs:
     - name: Get affected projects
       id: get-affected
       run: |
-        # Determine base and head branches
-        BASE_BRANCH="main"
-        HEAD_BRANCH="HEAD"
-        
-        echo "Detecting changes from $BASE_BRANCH to $HEAD_BRANCH"
-        
-        # Run the PowerShell script to get affected projects
-        pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch $BASE_BRANCH -HeadBranch $HEAD_BRANCH
-
-  # Job to determine what to deploy (for manual deployments)
-  determine-deployment:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    outputs:
-      has-changes: ${{ steps.get-affected.outputs.has-changes }}
-      matrix: ${{ steps.get-affected.outputs.matrix }}
-      affected-projects: ${{ steps.get-affected.outputs.affected-projects }}
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Setup environment
-      uses: ./.github/actions/setup-environment
-
-    - name: Get affected projects
-      id: get-affected
-      run: |
-        # For manual dispatch, use the specified app or all apps
-        if [ -n "${{ github.event.inputs.app-name }}" ]; then
-          # Specific app deployment
-          echo "Manual deployment for ${{ github.event.inputs.app-name }}"
-          echo "has-changes=true" >> $GITHUB_OUTPUT
-          echo "affected-projects=${{ github.event.inputs.app-name }}" >> $GITHUB_OUTPUT
+        if [ "${{ github.event_name }}" = "workflow_run" ]; then
+          # For workflow_run events, we need to determine what changed
+          # We'll use the commit SHA from the CI workflow
+          CI_COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
           
-          # Create matrix for specific app
-          matrix='{"include":[{"name":"${{ github.event.inputs.app-name }}","path":"apps/${{ github.event.inputs.app-name }}","type":"webapi"}]}'
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "Detecting changes for CI commit: $CI_COMMIT_SHA"
+          
+          # Get the previous commit on main to compare against
+          git fetch origin main:main
+          PREVIOUS_COMMIT=$(git rev-parse main~1)
+          
+          echo "Comparing $PREVIOUS_COMMIT to $CI_COMMIT_SHA"
+          
+          # Run the PowerShell script to get affected projects
+          pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch $PREVIOUS_COMMIT -HeadBranch $CI_COMMIT_SHA
         else
-          # Deploy all apps
-          echo "Manual deployment for all apps"
-          echo "has-changes=true" >> $GITHUB_OUTPUT
-          echo "affected-projects=EchoAPI" >> $GITHUB_OUTPUT
-          
-          matrix='{"include":[{"name":"EchoAPI","path":"apps/EchoAPI","type":"webapi"}]}'
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          # For manual dispatch, use the specified app or all apps
+          if [ -n "${{ github.event.inputs.app-name }}" ]; then
+            # Specific app deployment
+            echo "Manual deployment for ${{ github.event.inputs.app-name }}"
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            echo "affected-projects=${{ github.event.inputs.app-name }}" >> $GITHUB_OUTPUT
+            
+            # Create matrix for specific app
+            matrix='{"include":[{"name":"${{ github.event.inputs.app-name }}","path":"apps/${{ github.event.inputs.app-name }}","type":"webapi"}]}'
+            echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          else
+            # Deploy all apps
+            echo "Manual deployment for all apps"
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            echo "affected-projects=EchoAPI" >> $GITHUB_OUTPUT
+            
+            matrix='{"include":[{"name":"EchoAPI","path":"apps/EchoAPI","type":"webapi"}]}'
+            echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          fi
         fi
 
   # Consolidate deployment outputs
   consolidate-deployment:
-    needs: [load-config, detect-changes, determine-deployment]
+    needs: [load-config, determine-changes]
     runs-on: ubuntu-latest
     outputs:
       has-changes: ${{ steps.consolidate.outputs.has-changes }}
@@ -124,20 +116,37 @@ jobs:
     - name: Consolidate outputs
       id: consolidate
       run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          echo "has-changes=${{ needs.determine-deployment.outputs.has-changes }}" >> $GITHUB_OUTPUT
-          echo "matrix=${{ needs.determine-deployment.outputs.matrix }}" >> $GITHUB_OUTPUT
-          echo "affected-projects=${{ needs.determine-deployment.outputs.affected-projects }}" >> $GITHUB_OUTPUT
-        else
-          echo "has-changes=${{ needs.detect-changes.outputs.has-changes }}" >> $GITHUB_OUTPUT
-          echo "matrix=${{ needs.detect-changes.outputs.matrix }}" >> $GITHUB_OUTPUT
-          echo "affected-projects=${{ needs.detect-changes.outputs.affected-projects }}" >> $GITHUB_OUTPUT
-        fi
+        echo "has-changes=${{ needs.determine-changes.outputs.has-changes }}" >> $GITHUB_OUTPUT
+        echo "matrix=${{ needs.determine-changes.outputs.matrix }}" >> $GITHUB_OUTPUT
+        echo "affected-projects=${{ needs.determine-changes.outputs.affected-projects }}" >> $GITHUB_OUTPUT
 
-  # Build all projects for deployment
-  build-for-deployment:
+  # Download CI artifacts for deployment (automatic deployments)
+  download-artifacts:
     needs: consolidate-deployment
-    if: needs.consolidate-deployment.outputs.has-changes == 'true'
+    if: needs.consolidate-deployment.outputs.has-changes == 'true' && github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+      fail-fast: false
+    
+    steps:
+    - name: Download CI artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ matrix.project.name }}-build-artifacts
+        path: ./artifacts/${{ matrix.project.name }}
+
+    - name: Upload deployment artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.project.name }}-deployment-artifacts
+        path: ./artifacts/${{ matrix.project.name }}
+
+  # Build for manual deployments (when no CI artifacts available)
+  build-for-manual-deployment:
+    needs: [consolidate-deployment, determine-changes]
+    if: needs.consolidate-deployment.outputs.has-changes == 'true' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -147,6 +156,9 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ github.ref }}
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -169,18 +181,19 @@ jobs:
           --output ./publish/${{ matrix.project.name }} \
           --no-restore
 
-    - name: Upload artifacts
+    - name: Upload deployment artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.project.name }}-artifacts
+        name: ${{ matrix.project.name }}-deployment-artifacts
         path: ./publish/${{ matrix.project.name }}
 
   # Deploy to staging environment
   deploy-staging:
-    needs: [consolidate-deployment, build-for-deployment]
+    needs: [consolidate-deployment, download-artifacts, build-for-manual-deployment]
     if: |
       needs.consolidate-deployment.outputs.has-changes == 'true' && 
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging' || github.event_name == 'push')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging' || 
+       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -192,13 +205,10 @@ jobs:
       id: config
       uses: ./.github/actions/load-config
 
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Download build artifacts
+    - name: Download deployment artifacts
       uses: actions/download-artifact@v4
       with:
-        name: ${{ matrix.project.name }}-artifacts
+        name: ${{ matrix.project.name }}-deployment-artifacts
         path: ./artifacts
 
     - name: Deploy to Azure App Service
@@ -237,7 +247,7 @@ jobs:
 
   # Deploy to production (manual approval required)
   deploy-production:
-    needs: [consolidate-deployment, build-for-deployment, deploy-staging]
+    needs: [consolidate-deployment, download-artifacts, build-for-manual-deployment, deploy-staging]
     if: |
       needs.consolidate-deployment.outputs.has-changes == 'true' && 
       github.event_name == 'workflow_dispatch' && 
@@ -254,13 +264,10 @@ jobs:
       id: config
       uses: ./.github/actions/load-config
 
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Download build artifacts
+    - name: Download deployment artifacts
       uses: actions/download-artifact@v4
       with:
-        name: ${{ matrix.project.name }}-artifacts
+        name: ${{ matrix.project.name }}-deployment-artifacts
         path: ./artifacts
 
     - name: Deploy to Azure App Service
@@ -299,7 +306,7 @@ jobs:
 
   # Deployment summary
   deployment-summary:
-    needs: [consolidate-deployment, build-for-deployment, deploy-staging, deploy-production]
+    needs: [consolidate-deployment, download-artifacts, build-for-manual-deployment, deploy-staging, deploy-production]
     runs-on: ubuntu-latest
     if: always()
     
@@ -320,10 +327,18 @@ jobs:
           echo "❌ **Consolidate Deployment**: Failed" >> $GITHUB_STEP_SUMMARY
         fi
         
-        if [ "${{ needs.build-for-deployment.result }}" = "success" ]; then
-          echo "✅ **Build for Deployment**: Passed" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ github.event_name }}" = "workflow_run" ]; then
+          if [ "${{ needs.download-artifacts.result }}" = "success" ]; then
+            echo "✅ **Download Artifacts**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Download Artifacts**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
         else
-          echo "❌ **Build for Deployment**: Failed" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.build-for-manual-deployment.result }}" = "success" ]; then
+            echo "✅ **Build for Manual Deployment**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Build for Manual Deployment**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
         fi
         
         if [ "${{ needs.deploy-staging.result }}" = "success" ]; then
@@ -346,11 +361,19 @@ jobs:
           echo "${{ needs.consolidate-deployment.outputs.affected-projects }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "### Build Results" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.build-for-deployment.result }}" = "success" ]; then
-            echo "✅ All builds successful" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifact Results" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            if [ "${{ needs.download-artifacts.result }}" = "success" ]; then
+              echo "✅ All artifacts downloaded successfully" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❌ Some artifacts failed to download" >> $GITHUB_STEP_SUMMARY
+            fi
           else
-            echo "❌ Some builds failed" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ needs.build-for-manual-deployment.result }}" = "success" ]; then
+              echo "✅ All builds completed successfully" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❌ Some builds failed" >> $GITHUB_STEP_SUMMARY
+            fi
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           
