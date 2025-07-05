@@ -1,0 +1,36 @@
+{
+  "apps": {
+    "EchoAPI": {
+      "type": "webapi",
+      "path": "apps/EchoAPI",
+      "environments": ["dev", "staging", "prod"],
+      "deployment": {
+        "type": "azure-app-service",
+        "resourceGroup": "my-rg",
+        "appServiceName": "echo-api"
+      },
+      "build": {
+        "framework": "net8.0",
+        "publish": true,
+        "test": true
+      }
+    }
+  },
+  "libs": {
+    "Shared": {
+      "type": "classlib",
+      "path": "libs/Shared",
+      "publish": false,
+      "build": {
+        "framework": "net8.0",
+        "test": false
+      }
+    }
+  },
+  "global": {
+    "dotnetVersion": "8.0.x",
+    "cacheKey": "dotnet-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}",
+    "testFramework": "xunit",
+    "coverageTool": "coverlet"
+  }
+} 

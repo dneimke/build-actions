@@ -1,0 +1,171 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    types: [ opened, synchronize, reopened ]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  # Validate PR title and description
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check PR title format
+      uses: amannn/action-semantic-pull-request@v5
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        types: |
+          feat
+          fix
+          docs
+          style
+          refactor
+          test
+          chore
+        requireScope: false
+        requireBody: false
+
+  # Check for merge conflicts
+  check-conflicts:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check for merge conflicts
+      run: |
+        if [ "${{ github.event.pull_request.mergeable_state }}" = "conflicting" ]; then
+          echo "❌ This PR has merge conflicts that need to be resolved"
+          exit 1
+        else
+          echo "✅ No merge conflicts detected"
+        fi
+
+  # Run security scans
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run CodeQL Analysis
+      uses: github/codeql-action/init@v3
+      with:
+        languages: csharp
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+
+  # Dependency vulnerability check
+  dependency-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Check for vulnerable packages
+      run: |
+        echo "Checking for vulnerable NuGet packages..."
+        
+        # Get list of all .csproj files
+        find . -name "*.csproj" -type f | while read -r project; do
+          echo "Checking $project"
+          
+          # Check for known vulnerabilities (basic check)
+          dotnet list "$project" package --vulnerable
+          
+          if [ $? -ne 0 ]; then
+            echo "❌ Vulnerable packages found in $project"
+            exit 1
+          fi
+        done
+        
+        echo "✅ No vulnerable packages found"
+
+  # Code quality checks
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run Nx lint
+      run: |
+        echo "Running linting checks..."
+        npx nx run-many --target=lint --all
+        
+        if [ $? -ne 0 ]; then
+          echo "❌ Linting issues found"
+          exit 1
+        fi
+        
+        echo "✅ All linting checks passed"
+
+  # Size check (warn if PR is too large)
+  size-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check PR size
+      run: |
+        additions=${{ github.event.pull_request.additions }}
+        deletions=${{ github.event.pull_request.deletions }}
+        total_changes=$((additions + deletions))
+        
+        echo "PR changes: +$additions -$deletions (total: $total_changes)"
+        
+        if [ $total_changes -gt 1000 ]; then
+          echo "⚠️  Large PR detected ($total_changes changes)"
+          echo "Consider breaking this into smaller, more focused PRs"
+        else
+          echo "✅ PR size is reasonable"
+        fi
+
+  # Summary for PR
+  pr-summary:
+    needs: [validate-pr, check-conflicts, security-scan, dependency-check, code-quality, size-check]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Generate PR summary
+      run: |
+        echo "## Pull Request Validation Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Check each job result
+        jobs=("validate-pr" "check-conflicts" "security-scan" "dependency-check" "code-quality" "size-check")
+        
+        for job in "${jobs[@]}"; do
+          if [ "${{ needs.$job.result }}" = "success" ]; then
+            echo "✅ $job passed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.$job.result }}" = "failure" ]; then
+            echo "❌ $job failed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️  $job was skipped" >> $GITHUB_STEP_SUMMARY
+          fi
+        done
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Note:** This PR will also trigger the main CI workflow for build and test validation." >> $GITHUB_STEP_SUMMARY 

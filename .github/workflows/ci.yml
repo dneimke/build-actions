@@ -1,0 +1,152 @@
+name: CI - Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  # Job to determine affected projects
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      has-changes: ${{ steps.get-affected.outputs.has-changes }}
+      matrix: ${{ steps.get-affected.outputs.matrix }}
+      affected-projects: ${{ steps.get-affected.outputs.affected-projects }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for Nx affected detection
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Get affected projects
+      id: get-affected
+      run: |
+        # Determine base and head branches
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+          HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
+        else
+          BASE_BRANCH="main"
+          HEAD_BRANCH="${{ github.ref_name }}"
+        fi
+        
+        echo "Detecting changes from $BASE_BRANCH to $HEAD_BRANCH"
+        
+        # Run the PowerShell script to get affected projects
+        pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch $BASE_BRANCH -HeadBranch $HEAD_BRANCH
+
+  # Build affected projects in parallel
+  build:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
+    
+    steps:
+    - name: Build ${{ matrix.project.name }}
+      uses: ./.github/workflows/templates/build-dotnet.yml
+      with:
+        project-name: ${{ matrix.project.name }}
+        project-path: ${{ matrix.project.path }}
+        project-type: ${{ matrix.project.type }}
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        build-configuration: Release
+        publish: ${{ matrix.project.type == 'webapi' }}
+
+  # Test affected projects in parallel
+  test:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
+    
+    steps:
+    - name: Test ${{ matrix.project.name }}
+      uses: ./.github/workflows/templates/test-dotnet.yml
+      with:
+        project-name: ${{ matrix.project.name }}
+        project-path: ${{ matrix.project.path }}
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        collect-coverage: true
+
+  # Summary job to report results
+  summary:
+    needs: [detect-changes, build, test]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate summary
+      run: |
+        echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.detect-changes.outputs.has-changes }}" = "true" ]; then
+          echo "### Affected Projects" >> $GITHUB_STEP_SUMMARY
+          echo "${{ needs.detect-changes.outputs.affected-projects }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Build Results" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.build.result }}" = "success" ]; then
+            echo "✅ All builds passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some builds failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Test Results" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.test.result }}" = "success" ]; then
+            echo "✅ All tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some tests failed" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "No changes detected in any projects." >> $GITHUB_STEP_SUMMARY
+        fi
+
+  # Fail the workflow if any required jobs failed
+  check-results:
+    needs: [detect-changes, build, test]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Check build results
+      if: needs.detect-changes.outputs.has-changes == 'true' && needs.build.result != 'success'
+      run: |
+        echo "❌ Build job failed"
+        exit 1
+
+    - name: Check test results
+      if: needs.detect-changes.outputs.has-changes == 'true' && needs.test.result != 'success'
+      run: |
+        echo "❌ Test job failed"
+        exit 1
+
+    - name: All checks passed
+      if: needs.detect-changes.outputs.has-changes == 'true' && needs.build.result == 'success' && needs.test.result == 'success'
+      run: |
+        echo "✅ All checks passed" 

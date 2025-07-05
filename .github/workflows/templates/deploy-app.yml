@@ -1,0 +1,123 @@
+name: Deploy Application
+
+on:
+  workflow_call:
+    inputs:
+      app-name:
+        description: 'Name of the application to deploy'
+        required: true
+        type: string
+      app-path:
+        description: 'Path to the application directory'
+        required: true
+        type: string
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: string
+      deployment-type:
+        description: 'Type of deployment (azure-app-service, docker, etc.)'
+        required: true
+        type: string
+      artifacts-name:
+        description: 'Name of the artifacts to download'
+        required: true
+        type: string
+    secrets:
+      azure-credentials:
+        description: 'Azure credentials for deployment'
+        required: false
+      docker-username:
+        description: 'Docker username'
+        required: false
+      docker-password:
+        description: 'Docker password'
+        required: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.artifacts-name }}
+        path: ./artifacts
+
+    - name: Deploy to Azure App Service
+      if: inputs.deployment-type == 'azure-app-service'
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ inputs.app-name }}
+        package: ./artifacts
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+
+    - name: Deploy to Docker Registry
+      if: inputs.deployment-type == 'docker'
+      run: |
+        echo "Deploying ${{ inputs.app-name }} to Docker registry"
+        
+        # Build Docker image
+        docker build -t ${{ inputs.app-name }}:${{ github.sha }} ./artifacts
+        
+        # Tag for environment
+        docker tag ${{ inputs.app-name }}:${{ github.sha }} ${{ inputs.app-name }}:${{ inputs.environment }}
+        
+        # Login to registry
+        echo "${{ secrets.docker-password }}" | docker login -u "${{ secrets.docker-username }}" --password-stdin
+        
+        # Push images
+        docker push ${{ inputs.app-name }}:${{ github.sha }}
+        docker push ${{ inputs.app-name }}:${{ inputs.environment }}
+
+    - name: Deploy to Kubernetes
+      if: inputs.deployment-type == 'kubernetes'
+      run: |
+        echo "Deploying ${{ inputs.app-name }} to Kubernetes"
+        
+        # Update deployment manifest
+        sed -i "s/IMAGE_TAG/${{ github.sha }}/g" ./k8s/${{ inputs.app-name }}-deployment.yaml
+        
+        # Apply deployment
+        kubectl apply -f ./k8s/${{ inputs.app-name }}-deployment.yaml
+
+    - name: Health check
+      run: |
+        echo "Performing health check for ${{ inputs.app-name }}"
+        
+        # Wait for deployment to be ready
+        sleep 30
+        
+        # Basic health check (customize based on your app)
+        if [ "${{ inputs.deployment-type }}" = "azure-app-service" ]; then
+          # Get the app URL from Azure
+          APP_URL="https://${{ inputs.app-name }}.azurewebsites.net"
+          
+          # Check if the app is responding
+          response=$(curl -s -o /dev/null -w "%{http_code}" $APP_URL/health || echo "000")
+          
+          if [ "$response" = "200" ]; then
+            echo "✅ Health check passed"
+          else
+            echo "❌ Health check failed (HTTP $response)"
+            exit 1
+          fi
+        fi
+
+    - name: Notify deployment success
+      if: success()
+      run: |
+        echo "✅ Successfully deployed ${{ inputs.app-name }} to ${{ inputs.environment }}"
+        echo "Deployment SHA: ${{ github.sha }}"
+        echo "Environment: ${{ inputs.environment }}"
+
+    - name: Notify deployment failure
+      if: failure()
+      run: |
+        echo "❌ Failed to deploy ${{ inputs.app-name }} to ${{ inputs.environment }}"
+        echo "Please check the logs for more details" 
