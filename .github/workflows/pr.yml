@@ -103,7 +103,7 @@ jobs:
         deletions=${{ github.event.pull_request.deletions }}
         total_changes=$((additions + deletions))
         
-        .
+        echo "PR changes: +$additions -$deletions (total: $total_changes)".
         
         if [ $total_changes -gt 1000 ]; then
           echo "⚠️  Large PR detected ($total_changes changes)"
