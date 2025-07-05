@@ -5,16 +5,33 @@
   "sourceRoot": "libs/Shared",
   "targets": {
     "build": {
-      "executor": "nx:run-commands",
-      "outputs": ["{workspaceRoot}/bin/Shared"],
+      "executor": "@nx-dotnet/core:build",
+      "outputs": ["{projectRoot}/bin", "{projectRoot}/obj"],
+      "dependsOn": ["^build"],
       "options": {
-        "command": "npm run build:shared"
+        "configuration": "Debug"
+      },
+      "configurations": {
+        "production": {
+          "options": {
+            "configuration": "Release"
+          }
+        }
       }
     },
     "test": {
-      "executor": "nx:run-commands",
+      "executor": "@nx-dotnet/core:test",
+      "outputs": ["{projectRoot}/coverage"],
+      "dependsOn": ["^build"],
       "options": {
-        "command": "cd libs/Shared && dotnet test"
+        "configuration": "Debug"
+      },
+      "configurations": {
+        "production": {
+          "options": {
+            "configuration": "Release"
+          }
+        }
       }
     }
   },
