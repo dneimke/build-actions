@@ -22,8 +22,22 @@ function Get-AffectedProjects {
     )
     
     try {
+        # Check if Nx is available
+        $nxVersion = npx nx --version 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Error: Nx is not available. Please ensure Node.js dependencies are installed."
+            Write-Host "Run 'npm install' to install dependencies."
+            return @()
+        }
+        
+        Write-Host "Nx version: $nxVersion"
+        
         # Get affected projects using Nx
-        $affectedOutput = npx nx show projects --affected --base=$BaseBranch --head=$HeadBranch --json 2>$null
+        Write-Host "Running: npx nx show projects --affected --base=$BaseBranch --head=$HeadBranch --json"
+        $affectedOutput = npx nx show projects --affected --base=$BaseBranch --head=$HeadBranch --json 2>&1
+        
+        Write-Host "Nx output: $affectedOutput"
+        Write-Host "Exit code: $LASTEXITCODE"
         
         if ($LASTEXITCODE -eq 0 -and $affectedOutput) {
             $affectedProjects = $affectedOutput | ConvertFrom-Json

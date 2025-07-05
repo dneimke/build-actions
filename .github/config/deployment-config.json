@@ -1,6 +1,6 @@
 {
   "apps": {
-    "EchoAPI": {
+    "echo-api": {
       "type": "webapi",
       "path": "apps/EchoAPI",
       "environments": ["dev", "staging", "prod"],
@@ -17,7 +17,7 @@
     }
   },
   "libs": {
-    "Shared": {
+    "shared": {
       "type": "classlib",
       "path": "libs/Shared",
       "publish": false,
