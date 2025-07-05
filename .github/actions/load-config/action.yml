@@ -1,0 +1,100 @@
+name: Load Workflow Configuration
+description: Loads centralized workflow configuration from workflow-config.yml and makes it available as outputs
+
+outputs:
+  dotnet-version:
+    description: '.NET version from config'
+    value: ${{ steps.load-config.outputs.dotnet-version }}
+  node-version:
+    description: 'Node.js version from config'
+    value: ${{ steps.load-config.outputs.node-version }}
+  build-configuration:
+    description: 'Build configuration from config'
+    value: ${{ steps.load-config.outputs.build-configuration }}
+  artifacts-retention-days:
+    description: 'Artifacts retention days from config'
+    value: ${{ steps.load-config.outputs.artifacts-retention-days }}
+  health-check-delay:
+    description: 'Health check delay from config'
+    value: ${{ steps.load-config.outputs.health-check-delay }}
+  staging-environment:
+    description: 'Staging environment name from config'
+    value: ${{ steps.load-config.outputs.staging-environment }}
+  production-environment:
+    description: 'Production environment name from config'
+    value: ${{ steps.load-config.outputs.production-environment }}
+  main-branch:
+    description: 'Main branch name from config'
+    value: ${{ steps.load-config.outputs.main-branch }}
+  develop-branch:
+    description: 'Develop branch name from config'
+    value: ${{ steps.load-config.outputs.develop-branch }}
+  runner:
+    description: 'Default runner from config'
+    value: ${{ steps.load-config.outputs.runner }}
+  fetch-depth:
+    description: 'Fetch depth from config'
+    value: ${{ steps.load-config.outputs.fetch-depth }}
+
+runs:
+  using: composite
+  steps:
+    - name: Load workflow configuration
+      id: load-config
+      shell: bash
+      run: |
+        # Read the workflow config file
+        CONFIG_FILE=".github/config/workflow-config.yml"
+        
+        if [ ! -f "$CONFIG_FILE" ]; then
+          echo "Error: Configuration file $CONFIG_FILE not found"
+          exit 1
+        fi
+        
+        # Extract values using yq (if available) or grep/sed fallback
+        if command -v yq &> /dev/null; then
+          # Use yq for proper YAML parsing
+          DOTNET_VERSION=$(yq eval '.dotnet.version' "$CONFIG_FILE")
+          NODE_VERSION=$(yq eval '.node.version' "$CONFIG_FILE")
+          BUILD_CONFIG=$(yq eval '.dotnet.build-configuration' "$CONFIG_FILE")
+          RETENTION_DAYS=$(yq eval '.artifacts.retention-days' "$CONFIG_FILE")
+          HEALTH_DELAY=$(yq eval '.deployment.health-check-delay' "$CONFIG_FILE")
+          STAGING_ENV=$(yq eval '.deployment.environments.staging' "$CONFIG_FILE")
+          PROD_ENV=$(yq eval '.deployment.environments.production' "$CONFIG_FILE")
+          MAIN_BRANCH=$(yq eval '.branches.main' "$CONFIG_FILE")
+          DEVELOP_BRANCH=$(yq eval '.branches.develop' "$CONFIG_FILE")
+          RUNNER=$(yq eval '.jobs.runner' "$CONFIG_FILE")
+          FETCH_DEPTH=$(yq eval '.jobs.fetch-depth' "$CONFIG_FILE")
+        else
+          # Fallback using grep/sed for basic extraction
+          DOTNET_VERSION=$(grep "version:" "$CONFIG_FILE" | grep "8.0.x" | sed 's/.*version: //' | tr -d "'")
+          NODE_VERSION=$(grep "version:" "$CONFIG_FILE" | grep "'18'" | sed 's/.*version: //' | tr -d "'")
+          BUILD_CONFIG=$(grep "build-configuration:" "$CONFIG_FILE" | sed 's/.*build-configuration: //' | tr -d "'")
+          RETENTION_DAYS=$(grep "retention-days:" "$CONFIG_FILE" | sed 's/.*retention-days: //')
+          HEALTH_DELAY=$(grep "health-check-delay:" "$CONFIG_FILE" | sed 's/.*health-check-delay: //')
+          STAGING_ENV=$(grep "staging:" "$CONFIG_FILE" | sed 's/.*staging: //' | tr -d "'")
+          PROD_ENV=$(grep "production:" "$CONFIG_FILE" | sed 's/.*production: //' | tr -d "'")
+          MAIN_BRANCH=$(grep "main:" "$CONFIG_FILE" | sed 's/.*main: //' | tr -d "'")
+          DEVELOP_BRANCH=$(grep "develop:" "$CONFIG_FILE" | sed 's/.*develop: //' | tr -d "'")
+          RUNNER=$(grep "runner:" "$CONFIG_FILE" | sed 's/.*runner: //' | tr -d "'")
+          FETCH_DEPTH=$(grep "fetch-depth:" "$CONFIG_FILE" | sed 's/.*fetch-depth: //')
+        fi
+        
+        # Set outputs
+        echo "dotnet-version=$DOTNET_VERSION" >> $GITHUB_OUTPUT
+        echo "node-version=$NODE_VERSION" >> $GITHUB_OUTPUT
+        echo "build-configuration=$BUILD_CONFIG" >> $GITHUB_OUTPUT
+        echo "artifacts-retention-days=$RETENTION_DAYS" >> $GITHUB_OUTPUT
+        echo "health-check-delay=$HEALTH_DELAY" >> $GITHUB_OUTPUT
+        echo "staging-environment=$STAGING_ENV" >> $GITHUB_OUTPUT
+        echo "production-environment=$PROD_ENV" >> $GITHUB_OUTPUT
+        echo "main-branch=$MAIN_BRANCH" >> $GITHUB_OUTPUT
+        echo "develop-branch=$DEVELOP_BRANCH" >> $GITHUB_OUTPUT
+        echo "runner=$RUNNER" >> $GITHUB_OUTPUT
+        echo "fetch-depth=$FETCH_DEPTH" >> $GITHUB_OUTPUT
+        
+        echo "Configuration loaded successfully:"
+        echo "  .NET Version: $DOTNET_VERSION"
+        echo "  Node Version: $NODE_VERSION"
+        echo "  Build Config: $BUILD_CONFIG"
+        echo "  Retention Days: $RETENTION_DAYS" 

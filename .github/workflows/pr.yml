@@ -5,10 +5,26 @@ on:
     branches: [ main, develop ]
     types: [ opened, synchronize, reopened ]
 
-env:
-  DOTNET_VERSION: '8.0.x'
-
 jobs:
+  # Load workflow configuration
+  load-config:
+    runs-on: ubuntu-latest
+    outputs:
+      dotnet-version: ${{ steps.config.outputs.dotnet-version }}
+      main-branch: ${{ steps.config.outputs.main-branch }}
+      develop-branch: ${{ steps.config.outputs.develop-branch }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Load workflow configuration
+      id: config
+      uses: ./.github/actions/load-config
+
+  # Validate PR title and description
   # Validate PR title and description
   validate-pr:
     runs-on: ubuntu-latest
@@ -114,57 +130,12 @@ jobs:
 
   # Summary for PR
   pr-summary:
-    needs: [validate-pr, check-conflicts, dependency-check, code-quality, size-check]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-    - name: Generate PR summary
-      run: |
-        echo "## Pull Request Validation Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        # Check each job result individually
-        if [ "${{ needs.validate-pr.result }}" = "success" ]; then
-          echo "✅ validate-pr passed" >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ needs.validate-pr.result }}" = "failure" ]; then
-          echo "❌ validate-pr failed" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "⚠️  validate-pr was skipped" >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        if [ "${{ needs.check-conflicts.result }}" = "success" ]; then
-          echo "✅ check-conflicts passed" >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ needs.check-conflicts.result }}" = "failure" ]; then
-          echo "❌ check-conflicts failed" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "⚠️  check-conflicts was skipped" >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        if [ "${{ needs.dependency-check.result }}" = "success" ]; then
-          echo "✅ dependency-check passed" >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ needs.dependency-check.result }}" = "failure" ]; then
-          echo "❌ dependency-check failed" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "⚠️  dependency-check was skipped" >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        if [ "${{ needs.code-quality.result }}" = "success" ]; then
-          echo "✅ code-quality passed" >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ needs.code-quality.result }}" = "failure" ]; then
-          echo "❌ code-quality failed" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "⚠️  code-quality was skipped" >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        if [ "${{ needs.size-check.result }}" = "success" ]; then
-          echo "✅ size-check passed" >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ needs.size-check.result }}" = "failure" ]; then
-          echo "❌ size-check failed" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "⚠️  size-check was skipped" >> $GITHUB_STEP_SUMMARY
-        fi
-        
+    needs: [load-config, validate-pr, check-conflicts, dependency-check, code-quality, size-check]
+    uses: ./.github/workflows/templates/generate-summary.yml
+    with:
+      title: 'Pull Request Validation Summary'
+      jobs: '["validate-pr", "check-conflicts", "dependency-check", "code-quality", "size-check"]'
+      additional-content: |
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "---" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY

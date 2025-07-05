@@ -18,12 +18,39 @@ on:
         required: false
         type: string
 
-env:
-  DOTNET_VERSION: '8.0.x'
-
 jobs:
-  # Job to determine what to deploy
+  # Load workflow configuration
+  load-config:
+    runs-on: ubuntu-latest
+    outputs:
+      dotnet-version: ${{ steps.config.outputs.dotnet-version }}
+      build-configuration: ${{ steps.config.outputs.build-configuration }}
+      staging-environment: ${{ steps.config.outputs.staging-environment }}
+      production-environment: ${{ steps.config.outputs.production-environment }}
+      main-branch: ${{ steps.config.outputs.main-branch }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Load workflow configuration
+      id: config
+      uses: ./.github/actions/load-config
+
+  # Job to determine what to deploy (for automatic deployments)
+  # Job to determine what to deploy (for automatic deployments)
+  detect-changes:
+    if: github.event_name != 'workflow_dispatch'
+    uses: ./.github/workflows/templates/detect-changes.yml
+    with:
+      base-branch: 'main'
+      head-branch: 'HEAD'
+
+  # Job to determine what to deploy (for manual deployments)
   determine-deployment:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       has-changes: ${{ steps.get-affected.outputs.has-changes }}
@@ -36,51 +63,63 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: npm ci
+    - name: Setup environment
+      uses: ./.github/actions/setup-environment
 
     - name: Get affected projects
       id: get-affected
       run: |
         # For manual dispatch, use the specified app or all apps
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          if [ -n "${{ github.event.inputs.app-name }}" ]; then
-            # Specific app deployment
-            echo "Manual deployment for ${{ github.event.inputs.app-name }}"
-            echo "has-changes=true" >> $GITHUB_OUTPUT
-            echo "affected-projects=${{ github.event.inputs.app-name }}" >> $GITHUB_OUTPUT
-            
-            # Create matrix for specific app
-            matrix='{"include":[{"name":"${{ github.event.inputs.app-name }}","path":"apps/${{ github.event.inputs.app-name }}","type":"webapi"}]}'
-            echo "matrix=$matrix" >> $GITHUB_OUTPUT
-          else
-            # Deploy all apps
-            echo "Manual deployment for all apps"
-            echo "has-changes=true" >> $GITHUB_OUTPUT
-            echo "affected-projects=EchoAPI" >> $GITHUB_OUTPUT
-            
-            matrix='{"include":[{"name":"EchoAPI","path":"apps/EchoAPI","type":"webapi"}]}'
-            echo "matrix=$matrix" >> $GITHUB_OUTPUT
-          fi
+        if [ -n "${{ github.event.inputs.app-name }}" ]; then
+          # Specific app deployment
+          echo "Manual deployment for ${{ github.event.inputs.app-name }}"
+          echo "has-changes=true" >> $GITHUB_OUTPUT
+          echo "affected-projects=${{ github.event.inputs.app-name }}" >> $GITHUB_OUTPUT
+          
+          # Create matrix for specific app
+          matrix='{"include":[{"name":"${{ github.event.inputs.app-name }}","path":"apps/${{ github.event.inputs.app-name }}","type":"webapi"}]}'
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
         else
-          # Automatic deployment based on changes
-          pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch main -HeadBranch HEAD
+          # Deploy all apps
+          echo "Manual deployment for all apps"
+          echo "has-changes=true" >> $GITHUB_OUTPUT
+          echo "affected-projects=EchoAPI" >> $GITHUB_OUTPUT
+          
+          matrix='{"include":[{"name":"EchoAPI","path":"apps/EchoAPI","type":"webapi"}]}'
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+        fi
+
+  # Consolidate deployment outputs
+  consolidate-deployment:
+    needs: [load-config, detect-changes, determine-deployment]
+    runs-on: ubuntu-latest
+    outputs:
+      has-changes: ${{ steps.consolidate.outputs.has-changes }}
+      matrix: ${{ steps.consolidate.outputs.matrix }}
+      affected-projects: ${{ steps.consolidate.outputs.affected-projects }}
+    
+    steps:
+    - name: Consolidate outputs
+      id: consolidate
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "has-changes=${{ needs.determine-deployment.outputs.has-changes }}" >> $GITHUB_OUTPUT
+          echo "matrix=${{ needs.determine-deployment.outputs.matrix }}" >> $GITHUB_OUTPUT
+          echo "affected-projects=${{ needs.determine-deployment.outputs.affected-projects }}" >> $GITHUB_OUTPUT
+        else
+          echo "has-changes=${{ needs.detect-changes.outputs.has-changes }}" >> $GITHUB_OUTPUT
+          echo "matrix=${{ needs.detect-changes.outputs.matrix }}" >> $GITHUB_OUTPUT
+          echo "affected-projects=${{ needs.detect-changes.outputs.affected-projects }}" >> $GITHUB_OUTPUT
         fi
 
   # Build all projects for deployment
   build-for-deployment:
-    needs: determine-deployment
-    if: needs.determine-deployment.outputs.has-changes == 'true'
+    needs: consolidate-deployment
+    if: needs.consolidate-deployment.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ${{ fromJson(needs.determine-deployment.outputs.matrix) }}
+        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
       fail-fast: false
     
     steps:
@@ -90,20 +129,20 @@ jobs:
         project-name: ${{ matrix.project.name }}
         project-path: ${{ matrix.project.path }}
         project-type: ${{ matrix.project.type }}
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-        build-configuration: Release
+        dotnet-version: ${{ needs.load-config.outputs.dotnet-version }}
+        build-configuration: ${{ needs.load-config.outputs.build-configuration }}
         publish: true
 
   # Deploy to staging environment
   deploy-staging:
-    needs: [determine-deployment, build-for-deployment]
+    needs: [consolidate-deployment, build-for-deployment]
     if: |
-      needs.determine-deployment.outputs.has-changes == 'true' && 
+      needs.consolidate-deployment.outputs.has-changes == 'true' && 
       (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging' || github.event_name == 'push')
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ${{ fromJson(needs.determine-deployment.outputs.matrix) }}
+        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
       fail-fast: false
     
     steps:
@@ -112,7 +151,7 @@ jobs:
       with:
         app-name: ${{ matrix.project.name }}
         app-path: ${{ matrix.project.path }}
-        environment: staging
+        environment: ${{ needs.load-config.outputs.staging-environment }}
         deployment-type: azure-app-service
         artifacts-name: ${{ matrix.project.name }}-artifacts
       secrets:
@@ -120,16 +159,16 @@ jobs:
 
   # Deploy to production (manual approval required)
   deploy-production:
-    needs: [determine-deployment, build-for-deployment, deploy-staging]
+    needs: [consolidate-deployment, build-for-deployment, deploy-staging]
     if: |
-      needs.determine-deployment.outputs.has-changes == 'true' && 
+      needs.consolidate-deployment.outputs.has-changes == 'true' && 
       github.event_name == 'workflow_dispatch' && 
       github.event.inputs.environment == 'production'
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ needs.load-config.outputs.production-environment }}
     strategy:
       matrix:
-        project: ${{ fromJson(needs.determine-deployment.outputs.matrix) }}
+        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
       fail-fast: false
     
     steps:
@@ -138,7 +177,7 @@ jobs:
       with:
         app-name: ${{ matrix.project.name }}
         app-path: ${{ matrix.project.path }}
-        environment: production
+        environment: ${{ needs.load-config.outputs.production-environment }}
         deployment-type: azure-app-service
         artifacts-name: ${{ matrix.project.name }}-artifacts
       secrets:
@@ -146,19 +185,15 @@ jobs:
 
   # Deployment summary
   deployment-summary:
-    needs: [determine-deployment, build-for-deployment, deploy-staging, deploy-production]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-    - name: Generate deployment summary
-      run: |
-        echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        if [ "${{ needs.determine-deployment.outputs.has-changes }}" = "true" ]; then
+    needs: [consolidate-deployment, build-for-deployment, deploy-staging, deploy-production]
+    uses: ./.github/workflows/templates/generate-summary.yml
+    with:
+      title: 'Deployment Summary'
+      jobs: '["consolidate-deployment", "build-for-deployment", "deploy-staging", "deploy-production"]'
+      additional-content: |
+        if [ "${{ needs.consolidate-deployment.outputs.has-changes }}" = "true" ]; then
           echo "### Deployed Projects" >> $GITHUB_STEP_SUMMARY
-          echo "${{ needs.determine-deployment.outputs.affected-projects }}" >> $GITHUB_STEP_SUMMARY
+          echo "${{ needs.consolidate-deployment.outputs.affected-projects }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### Build Results" >> $GITHUB_STEP_SUMMARY

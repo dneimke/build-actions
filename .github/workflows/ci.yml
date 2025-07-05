@@ -6,47 +6,33 @@ on:
   pull_request:
     branches: [ main, develop ]
 
-env:
-  DOTNET_VERSION: '8.0.x'
-
 jobs:
-  # Job to determine affected projects
-  detect-changes:
+  # Load workflow configuration
+  load-config:
     runs-on: ubuntu-latest
     outputs:
-      has-changes: ${{ steps.get-affected.outputs.has-changes }}
-      matrix: ${{ steps.get-affected.outputs.matrix }}
-      affected-projects: ${{ steps.get-affected.outputs.affected-projects }}
+      dotnet-version: ${{ steps.config.outputs.dotnet-version }}
+      build-configuration: ${{ steps.config.outputs.build-configuration }}
+      main-branch: ${{ steps.config.outputs.main-branch }}
+      develop-branch: ${{ steps.config.outputs.develop-branch }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Required for Nx affected detection
+        fetch-depth: 0
 
-    - name: Setup environment
-      uses: ./.github/actions/setup-environment
+    - name: Load workflow configuration
+      id: config
+      uses: ./.github/actions/load-config
 
-    - name: Get affected projects
-      id: get-affected
-      run: |
-        # Determine base and head branches
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
-          HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
-        else
-          BASE_BRANCH="main"
-          HEAD_BRANCH="${{ github.ref_name }}"
-        fi
-        
-        echo "Detecting changes from $BASE_BRANCH to $HEAD_BRANCH"
-        
-        # Run the PowerShell script to get affected projects
-        pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch $BASE_BRANCH -HeadBranch $HEAD_BRANCH
+  # Job to determine affected projects
+  detect-changes:
+    uses: ./.github/workflows/templates/detect-changes.yml
 
   # Build affected projects in parallel
   build:
-    needs: detect-changes
+    needs: [load-config, detect-changes]
     if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
@@ -61,13 +47,13 @@ jobs:
         project-name: ${{ matrix.project.name }}
         project-path: ${{ matrix.project.path }}
         project-type: ${{ matrix.project.type }}
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-        build-configuration: Release
+        dotnet-version: ${{ needs.load-config.outputs.dotnet-version }}
+        build-configuration: ${{ needs.load-config.outputs.build-configuration }}
         publish: ${{ matrix.project.type == 'webapi' }}
 
   # Test affected projects in parallel
   test:
-    needs: detect-changes
+    needs: [load-config, detect-changes]
     if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
@@ -81,23 +67,17 @@ jobs:
       with:
         project-name: ${{ matrix.project.name }}
         project-path: ${{ matrix.project.path }}
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+        dotnet-version: ${{ needs.load-config.outputs.dotnet-version }}
         collect-coverage: true
 
   # Summary job to report results
   summary:
-    needs: [detect-changes, build, test]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Generate summary
-      run: |
-        echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
-        
+    needs: [load-config, detect-changes, build, test]
+    uses: ./.github/workflows/templates/generate-summary.yml
+    with:
+      title: 'CI Summary'
+      jobs: '["detect-changes", "build", "test"]'
+      additional-content: |
         if [ "${{ needs.detect-changes.outputs.has-changes }}" = "true" ]; then
           echo "### Affected Projects" >> $GITHUB_STEP_SUMMARY
           echo "${{ needs.detect-changes.outputs.affected-projects }}" >> $GITHUB_STEP_SUMMARY
@@ -123,7 +103,7 @@ jobs:
 
   # Fail the workflow if any required jobs failed
   check-results:
-    needs: [detect-changes, build, test]
+    needs: [load-config, detect-changes, build, test]
     runs-on: ubuntu-latest
     if: always()
     

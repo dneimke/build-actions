@@ -12,15 +12,19 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Load workflow configuration
+      id: config
+      uses: ./.github/actions/load-config
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: ${{ inputs.dotnet-version }}
+        dotnet-version: ${{ inputs.dotnet-version || steps.config.outputs.dotnet-version }}
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ inputs.node-version }}
+        node-version: ${{ inputs.node-version || steps.config.outputs.node-version }}
         cache: 'npm'
 
     - name: Install dependencies

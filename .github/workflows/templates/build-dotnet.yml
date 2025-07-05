@@ -46,43 +46,20 @@ jobs:
       artifacts-path: ${{ steps.build.outputs.artifacts-path }}
     
     steps:
+    - name: Load workflow configuration
+      id: config
+      uses: ./.github/actions/load-config
+
+    - name: Checkout code
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Required for Nx affected detection
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+    - name: Setup environment
+      uses: ./.github/actions/setup-environment
       with:
         dotnet-version: ${{ inputs.dotnet-version }}
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: npm ci
-
-    - name: Restore .NET dependencies
-      run: npx nx g @nx-dotnet/core:restore
-
-    - name: Cache NuGet packages
-      uses: actions/cache@v4
-      with:
-        path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-        restore-keys: |
-          ${{ runner.os }}-nuget-
-
-    - name: Cache Nx
-      uses: actions/cache@v4
-      with:
-        path: .nx/cache
-        key: ${{ runner.os }}-nx-${{ hashFiles('**/nx.json') }}
-        restore-keys: |
-          ${{ runner.os }}-nx-
 
     - name: Build project
       id: build
@@ -114,4 +91,4 @@ jobs:
       with:
         name: ${{ inputs.project-name }}-artifacts
         path: ${{ steps.build.outputs.artifacts-path }}
-        retention-days: 7 
+        retention-days: ${{ steps.config.outputs.artifacts-retention-days }} 

@@ -1,0 +1,59 @@
+name: Detect Changes
+
+on:
+  workflow_call:
+    inputs:
+      base-branch:
+        description: 'Base branch to compare against'
+        required: false
+        type: string
+        default: 'main'
+      head-branch:
+        description: 'Head branch to compare from'
+        required: false
+        type: string
+        default: 'HEAD'
+    outputs:
+      has-changes:
+        description: 'Whether any changes were detected'
+        value: ${{ jobs.detect.outputs.has-changes }}
+      matrix:
+        description: 'Matrix of affected projects'
+        value: ${{ jobs.detect.outputs.matrix }}
+      affected-projects:
+        description: 'Comma-separated list of affected projects'
+        value: ${{ jobs.detect.outputs.affected-projects }}
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      has-changes: ${{ steps.get-affected.outputs.has-changes }}
+      matrix: ${{ steps.get-affected.outputs.matrix }}
+      affected-projects: ${{ steps.get-affected.outputs.affected-projects }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for Nx affected detection
+
+    - name: Setup environment
+      uses: ./.github/actions/setup-environment
+
+    - name: Get affected projects
+      id: get-affected
+      run: |
+        # Determine base and head branches
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+          HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
+        else
+          BASE_BRANCH="${{ inputs.base-branch }}"
+          HEAD_BRANCH="${{ inputs.head-branch }}"
+        fi
+        
+        echo "Detecting changes from $BASE_BRANCH to $HEAD_BRANCH"
+        
+        # Run the PowerShell script to get affected projects
+        pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch $BASE_BRANCH -HeadBranch $HEAD_BRANCH 

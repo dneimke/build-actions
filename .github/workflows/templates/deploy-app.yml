@@ -40,6 +40,11 @@ jobs:
     environment: ${{ inputs.environment }}
     
     steps:
+    - name: Load workflow configuration
+      id: config
+      uses: ./.github/actions/load-config
+
+    - name: Checkout code
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -57,41 +62,12 @@ jobs:
         package: ./artifacts
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
 
-    - name: Deploy to Docker Registry
-      if: inputs.deployment-type == 'docker'
-      run: |
-        echo "Deploying ${{ inputs.app-name }} to Docker registry"
-        
-        # Build Docker image
-        docker build -t ${{ inputs.app-name }}:${{ github.sha }} ./artifacts
-        
-        # Tag for environment
-        docker tag ${{ inputs.app-name }}:${{ github.sha }} ${{ inputs.app-name }}:${{ inputs.environment }}
-        
-        # Login to registry
-        echo "${{ secrets.docker-password }}" | docker login -u "${{ secrets.docker-username }}" --password-stdin
-        
-        # Push images
-        docker push ${{ inputs.app-name }}:${{ github.sha }}
-        docker push ${{ inputs.app-name }}:${{ inputs.environment }}
-
-    - name: Deploy to Kubernetes
-      if: inputs.deployment-type == 'kubernetes'
-      run: |
-        echo "Deploying ${{ inputs.app-name }} to Kubernetes"
-        
-        # Update deployment manifest
-        sed -i "s/IMAGE_TAG/${{ github.sha }}/g" ./k8s/${{ inputs.app-name }}-deployment.yaml
-        
-        # Apply deployment
-        kubectl apply -f ./k8s/${{ inputs.app-name }}-deployment.yaml
-
     - name: Health check
       run: |
         echo "Performing health check for ${{ inputs.app-name }}"
         
         # Wait for deployment to be ready
-        sleep 30
+        sleep ${{ steps.config.outputs.health-check-delay }}
         
         # Basic health check (customize based on your app)
         if [ "${{ inputs.deployment-type }}" = "azure-app-service" ]; then

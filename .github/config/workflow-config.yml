@@ -1,0 +1,27 @@
+# Workflow Configuration
+# This file centralizes common configuration values used across GitHub Actions workflows
+
+dotnet:
+  version: '8.0.x'
+  build-configuration: 'Release'
+
+node:
+  version: '18'
+
+artifacts:
+  retention-days: 7
+
+deployment:
+  health-check-delay: 30
+  environments:
+    staging: 'staging'
+    production: 'production'
+
+branches:
+  main: 'main'
+  develop: 'develop'
+
+# Common job configurations
+jobs:
+  runner: 'ubuntu-latest'
+  fetch-depth: 0  # Required for Nx affected detection 
