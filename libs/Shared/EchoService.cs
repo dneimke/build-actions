@@ -1,6 +1,6 @@
 namespace Shared;
 
-public class EchoService
+public class EchoService  
 {
     public string Echo(string message)
     {
