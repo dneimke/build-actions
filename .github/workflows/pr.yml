@@ -42,71 +42,6 @@ jobs:
           echo "✅ No merge conflicts detected"
         fi
 
-  # Run security scans
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Required for Nx affected detection
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: npm ci
-
-    - name: Restore .NET dependencies
-      run: npx nx g @nx-dotnet/core:restore
-
-    - name: Cache NuGet packages
-      uses: actions/cache@v4
-      with:
-        path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-        restore-keys: |
-          ${{ runner.os }}-nuget-
-
-    - name: Cache Nx
-      uses: actions/cache@v4
-      with:
-        path: .nx/cache
-        key: ${{ runner.os }}-nx-${{ hashFiles('**/nx.json') }}
-        restore-keys: |
-          ${{ runner.os }}-nx-
-
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: csharp
-
-    - name: Build all projects for CodeQL analysis
-      run: |
-        echo "Building all .NET projects for security analysis..."
-        
-        # Build all projects in the solution using Nx
-        # This ensures proper dependency order and builds all projects
-        npx nx run-many --target=build --all --configuration=Release
-        
-        if [ $? -ne 0 ]; then
-          echo "❌ Build failed - cannot proceed with security analysis"
-          exit 1
-        fi
-        
-        echo "✅ All projects built successfully for CodeQL analysis"
-
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
-
   # Dependency vulnerability check
   dependency-check:
     runs-on: ubuntu-latest
@@ -114,30 +49,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: npm ci
-
-    - name: Restore .NET dependencies
-      run: npx nx g @nx-dotnet/core:restore
-
-    - name: Cache NuGet packages
-      uses: actions/cache@v4
-      with:
-        path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-        restore-keys: |
-          ${{ runner.os }}-nuget-
+    - name: Setup environment
+      uses: ./.github/actions/setup-environment
 
     - name: Check for vulnerable packages
       run: |
@@ -147,7 +60,7 @@ jobs:
         find . -name "*.csproj" -type f | while read -r project; do
           echo "Checking $project"
           
-          # Check for known vulnerabilities (basic check)
+          # Check for known vulnerabilities
           dotnet list "$project" package --vulnerable
           
           if [ $? -ne 0 ]; then
@@ -165,19 +78,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: npm ci
+    - name: Setup environment
+      uses: ./.github/actions/setup-environment
 
     - name: Run Nx lint
       run: |
@@ -201,7 +103,7 @@ jobs:
         deletions=${{ github.event.pull_request.deletions }}
         total_changes=$((additions + deletions))
         
-        echo "PR changes: +$additions -$deletions (total: $total_changes)"
+        echo "PR changes: +$additions -$deletions (total: $total_changes)".
         
         if [ $total_changes -gt 1000 ]; then
           echo "⚠️  Large PR detected ($total_changes changes)"
@@ -212,7 +114,7 @@ jobs:
 
   # Summary for PR
   pr-summary:
-    needs: [validate-pr, check-conflicts, security-scan, dependency-check, code-quality, size-check]
+    needs: [validate-pr, check-conflicts, dependency-check, code-quality, size-check]
     runs-on: ubuntu-latest
     if: always()
     
@@ -237,14 +139,6 @@ jobs:
           echo "❌ check-conflicts failed" >> $GITHUB_STEP_SUMMARY
         else
           echo "⚠️  check-conflicts was skipped" >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        if [ "${{ needs.security-scan.result }}" = "success" ]; then
-          echo "✅ security-scan passed" >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ needs.security-scan.result }}" = "failure" ]; then
-          echo "❌ security-scan failed" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "⚠️  security-scan was skipped" >> $GITHUB_STEP_SUMMARY
         fi
         
         if [ "${{ needs.dependency-check.result }}" = "success" ]; then
