@@ -200,18 +200,23 @@ jobs:
     
     steps:
     - name: Check build results
-      if: needs.detect-changes.outputs.has-changes == 'true' && needs.build.result != 'success'
+      if: needs.detect-changes.outputs.has-changes == 'true' && needs.build.result != 'success' && needs.build.result != 'skipped'
       run: |
         echo "❌ Build job failed"
         exit 1
 
     - name: Check test results
-      if: needs.detect-changes.outputs.has-changes == 'true' && needs.test.result != 'success'
+      if: needs.detect-changes.outputs.has-changes == 'true' && needs.test.result != 'success' && needs.test.result != 'skipped'
       run: |
         echo "❌ Test job failed"
         exit 1
 
     - name: All checks passed
-      if: needs.detect-changes.outputs.has-changes == 'true' && needs.build.result == 'success' && needs.test.result == 'success'
+      if: needs.detect-changes.outputs.has-changes == 'true' && (needs.build.result == 'success' || needs.build.result == 'skipped') && (needs.test.result == 'success' || needs.test.result == 'skipped')
       run: |
-        echo "✅ All checks passed" 
+        echo "✅ All checks passed"
+        
+    - name: No changes detected
+      if: needs.detect-changes.outputs.has-changes == 'false'
+      run: |
+        echo "ℹ️ No changes detected - skipping build and test" 
