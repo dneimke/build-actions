@@ -42,7 +42,13 @@ jobs:
         ref: ${{ github.head_ref || github.ref_name }}
 
     - name: Fetch main branch
-      run: git fetch origin main:main
+      run: |
+        # Fetch main branch safely
+        if [ "${{ github.ref_name }}" = "main" ]; then
+          echo "Already on main branch, no need to fetch"
+        else
+          git fetch origin main:main
+        fi
 
     - name: Setup environment
       uses: ./.github/actions/setup-environment
