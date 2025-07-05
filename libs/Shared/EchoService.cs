@@ -38,6 +38,6 @@ public class EchoService
 
     public string GetTimestamp()
     {
-        return $"Current timestamp is: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+        return $"Current timestamp is:: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
     }
 }
