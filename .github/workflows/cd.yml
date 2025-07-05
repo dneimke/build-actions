@@ -43,10 +43,32 @@ jobs:
   # Job to determine what to deploy (for automatic deployments)
   detect-changes:
     if: github.event_name != 'workflow_dispatch'
-    uses: ./.github/workflows/templates/detect-changes.yml
-    with:
-      base-branch: 'main'
-      head-branch: 'HEAD'
+    runs-on: ubuntu-latest
+    outputs:
+      has-changes: ${{ steps.get-affected.outputs.has-changes }}
+      matrix: ${{ steps.get-affected.outputs.matrix }}
+      affected-projects: ${{ steps.get-affected.outputs.affected-projects }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for Nx affected detection
+
+    - name: Setup environment
+      uses: ./.github/actions/setup-environment
+
+    - name: Get affected projects
+      id: get-affected
+      run: |
+        # Determine base and head branches
+        BASE_BRANCH="main"
+        HEAD_BRANCH="HEAD"
+        
+        echo "Detecting changes from $BASE_BRANCH to $HEAD_BRANCH"
+        
+        # Run the PowerShell script to get affected projects
+        pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch $BASE_BRANCH -HeadBranch $HEAD_BRANCH
 
   # Job to determine what to deploy (for manual deployments)
   determine-deployment:
@@ -123,15 +145,35 @@ jobs:
       fail-fast: false
     
     steps:
-    - name: Build ${{ matrix.project.name }} for deployment
-      uses: ./.github/workflows/templates/build-dotnet.yml
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
       with:
-        project-name: ${{ matrix.project.name }}
-        project-path: ${{ matrix.project.path }}
-        project-type: ${{ matrix.project.type }}
         dotnet-version: ${{ needs.load-config.outputs.dotnet-version }}
-        build-configuration: ${{ needs.load-config.outputs.build-configuration }}
-        publish: true
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ matrix.project.path }}
+
+    - name: Build project
+      run: |
+        dotnet build ${{ matrix.project.path }} \
+          --configuration ${{ needs.load-config.outputs.build-configuration }} \
+          --no-restore
+
+    - name: Publish project
+      run: |
+        dotnet publish ${{ matrix.project.path }} \
+          --configuration ${{ needs.load-config.outputs.build-configuration }} \
+          --output ./publish/${{ matrix.project.name }} \
+          --no-restore
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.project.name }}-artifacts
+        path: ./publish/${{ matrix.project.name }}
 
   # Deploy to staging environment
   deploy-staging:
@@ -146,16 +188,52 @@ jobs:
       fail-fast: false
     
     steps:
-    - name: Deploy ${{ matrix.project.name }} to staging
-      uses: ./.github/workflows/templates/deploy-app.yml
+    - name: Load workflow configuration
+      id: config
+      uses: ./.github/actions/load-config
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ matrix.project.name }}-artifacts
+        path: ./artifacts
+
+    - name: Deploy to Azure App Service
+      uses: azure/webapps-deploy@v3
       with:
         app-name: ${{ matrix.project.name }}
-        app-path: ${{ matrix.project.path }}
-        environment: ${{ needs.load-config.outputs.staging-environment }}
-        deployment-type: azure-app-service
-        artifacts-name: ${{ matrix.project.name }}-artifacts
-      secrets:
-        azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
+        package: ./artifacts
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+
+    - name: Health check
+      run: |
+        echo "Performing health check for ${{ matrix.project.name }}"
+        
+        # Wait for deployment to be ready
+        sleep ${{ steps.config.outputs.health-check-delay }}
+        
+        # Basic health check
+        APP_URL="https://${{ matrix.project.name }}.azurewebsites.net"
+        
+        # Check if the app is responding
+        response=$(curl -s -o /dev/null -w "%{http_code}" $APP_URL/health || echo "000")
+        
+        if [ "$response" = "200" ]; then
+          echo "✅ Health check passed"
+        else
+          echo "❌ Health check failed (HTTP $response)"
+          exit 1
+        fi
+
+    - name: Notify deployment success
+      if: success()
+      run: |
+        echo "✅ Successfully deployed ${{ matrix.project.name }} to staging"
+        echo "Deployment SHA: ${{ github.sha }}"
+        echo "Environment: staging"
 
   # Deploy to production (manual approval required)
   deploy-production:
@@ -172,25 +250,97 @@ jobs:
       fail-fast: false
     
     steps:
-    - name: Deploy ${{ matrix.project.name }} to production
-      uses: ./.github/workflows/templates/deploy-app.yml
+    - name: Load workflow configuration
+      id: config
+      uses: ./.github/actions/load-config
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ matrix.project.name }}-artifacts
+        path: ./artifacts
+
+    - name: Deploy to Azure App Service
+      uses: azure/webapps-deploy@v3
       with:
         app-name: ${{ matrix.project.name }}
-        app-path: ${{ matrix.project.path }}
-        environment: ${{ needs.load-config.outputs.production-environment }}
-        deployment-type: azure-app-service
-        artifacts-name: ${{ matrix.project.name }}-artifacts
-      secrets:
-        azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
+        package: ./artifacts
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+
+    - name: Health check
+      run: |
+        echo "Performing health check for ${{ matrix.project.name }}"
+        
+        # Wait for deployment to be ready
+        sleep ${{ steps.config.outputs.health-check-delay }}
+        
+        # Basic health check
+        APP_URL="https://${{ matrix.project.name }}.azurewebsites.net"
+        
+        # Check if the app is responding
+        response=$(curl -s -o /dev/null -w "%{http_code}" $APP_URL/health || echo "000")
+        
+        if [ "$response" = "200" ]; then
+          echo "✅ Health check passed"
+        else
+          echo "❌ Health check failed (HTTP $response)"
+          exit 1
+        fi
+
+    - name: Notify deployment success
+      if: success()
+      run: |
+        echo "✅ Successfully deployed ${{ matrix.project.name }} to production"
+        echo "Deployment SHA: ${{ github.sha }}"
+        echo "Environment: production"
 
   # Deployment summary
   deployment-summary:
     needs: [consolidate-deployment, build-for-deployment, deploy-staging, deploy-production]
-    uses: ./.github/workflows/templates/generate-summary.yml
-    with:
-      title: 'Deployment Summary'
-      jobs: '["consolidate-deployment", "build-for-deployment", "deploy-staging", "deploy-production"]'
-      additional-content: |
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Generate summary
+      run: |
+        echo "# Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Add job status information
+        echo "## Job Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Check each job result
+        if [ "${{ needs.consolidate-deployment.result }}" = "success" ]; then
+          echo "✅ **Consolidate Deployment**: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Consolidate Deployment**: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.build-for-deployment.result }}" = "success" ]; then
+          echo "✅ **Build for Deployment**: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Build for Deployment**: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.deploy-staging.result }}" = "success" ]; then
+          echo "✅ **Deploy Staging**: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Deploy Staging**: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.deploy-production.result }}" = "success" ]; then
+          echo "✅ **Deploy Production**: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Deploy Production**: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Add deployment details
         if [ "${{ needs.consolidate-deployment.outputs.has-changes }}" = "true" ]; then
           echo "### Deployed Projects" >> $GITHUB_STEP_SUMMARY
           echo "${{ needs.consolidate-deployment.outputs.affected-projects }}" >> $GITHUB_STEP_SUMMARY

@@ -131,11 +131,50 @@ jobs:
   # Summary for PR
   pr-summary:
     needs: [load-config, validate-pr, check-conflicts, dependency-check, code-quality, size-check]
-    uses: ./.github/workflows/templates/generate-summary.yml
-    with:
-      title: 'Pull Request Validation Summary'
-      jobs: '["validate-pr", "check-conflicts", "dependency-check", "code-quality", "size-check"]'
-      additional-content: |
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Generate summary
+      run: |
+        echo "# Pull Request Validation Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Add job status information
+        echo "## Job Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Check each job result
+        if [ "${{ needs.validate-pr.result }}" = "success" ]; then
+          echo "✅ **PR Validation**: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **PR Validation**: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.check-conflicts.result }}" = "success" ]; then
+          echo "✅ **Conflict Check**: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Conflict Check**: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.dependency-check.result }}" = "success" ]; then
+          echo "✅ **Dependency Check**: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Dependency Check**: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.code-quality.result }}" = "success" ]; then
+          echo "✅ **Code Quality**: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Code Quality**: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.size-check.result }}" = "success" ]; then
+          echo "✅ **Size Check**: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Size Check**: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "---" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY

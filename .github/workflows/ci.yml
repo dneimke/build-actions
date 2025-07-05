@@ -28,7 +28,37 @@ jobs:
 
   # Job to determine affected projects
   detect-changes:
-    uses: ./.github/workflows/templates/detect-changes.yml
+    runs-on: ubuntu-latest
+    outputs:
+      has-changes: ${{ steps.get-affected.outputs.has-changes }}
+      matrix: ${{ steps.get-affected.outputs.matrix }}
+      affected-projects: ${{ steps.get-affected.outputs.affected-projects }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for Nx affected detection
+
+    - name: Setup environment
+      uses: ./.github/actions/setup-environment
+
+    - name: Get affected projects
+      id: get-affected
+      run: |
+        # Determine base and head branches
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+          HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
+        else
+          BASE_BRANCH="main"
+          HEAD_BRANCH="HEAD"
+        fi
+        
+        echo "Detecting changes from $BASE_BRANCH to $HEAD_BRANCH"
+        
+        # Run the PowerShell script to get affected projects
+        pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch $BASE_BRANCH -HeadBranch $HEAD_BRANCH
 
   # Build affected projects in parallel
   build:
@@ -41,15 +71,30 @@ jobs:
       fail-fast: false
     
     steps:
-    - name: Build ${{ matrix.project.name }}
-      uses: ./.github/workflows/templates/build-dotnet.yml
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
       with:
-        project-name: ${{ matrix.project.name }}
-        project-path: ${{ matrix.project.path }}
-        project-type: ${{ matrix.project.type }}
         dotnet-version: ${{ needs.load-config.outputs.dotnet-version }}
-        build-configuration: ${{ needs.load-config.outputs.build-configuration }}
-        publish: ${{ matrix.project.type == 'webapi' }}
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ matrix.project.path }}
+
+    - name: Build project
+      run: |
+        dotnet build ${{ matrix.project.path }} \
+          --configuration ${{ needs.load-config.outputs.build-configuration }} \
+          --no-restore
+
+    - name: Publish project (if webapi)
+      if: matrix.project.type == 'webapi'
+      run: |
+        dotnet publish ${{ matrix.project.path }} \
+          --configuration ${{ needs.load-config.outputs.build-configuration }} \
+          --output ./publish/${{ matrix.project.name }} \
+          --no-restore
 
   # Test affected projects in parallel
   test:
@@ -62,43 +107,73 @@ jobs:
       fail-fast: false
     
     steps:
-    - name: Test ${{ matrix.project.name }}
-      uses: ./.github/workflows/templates/test-dotnet.yml
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
       with:
-        project-name: ${{ matrix.project.name }}
-        project-path: ${{ matrix.project.path }}
         dotnet-version: ${{ needs.load-config.outputs.dotnet-version }}
-        collect-coverage: true
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ matrix.project.path }}
+
+    - name: Run tests
+      run: |
+        dotnet test ${{ matrix.project.path }} \
+          --configuration ${{ needs.load-config.outputs.build-configuration }} \
+          --no-restore \
+          --collect:"XPlat Code Coverage" \
+          --results-directory ./coverage
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage/**/coverage.cobertura.xml
+        flags: ${{ matrix.project.name }}
+        name: ${{ matrix.project.name }}-coverage
 
   # Summary job to report results
   summary:
     needs: [load-config, detect-changes, build, test]
-    uses: ./.github/workflows/templates/generate-summary.yml
-    with:
-      title: 'CI Summary'
-      jobs: '["detect-changes", "build", "test"]'
-      additional-content: |
-        if [ "${{ needs.detect-changes.outputs.has-changes }}" = "true" ]; then
-          echo "### Affected Projects" >> $GITHUB_STEP_SUMMARY
-          echo "${{ needs.detect-changes.outputs.affected-projects }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "### Build Results" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.build.result }}" = "success" ]; then
-            echo "✅ All builds passed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Some builds failed" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "### Test Results" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.test.result }}" = "success" ]; then
-            echo "✅ All tests passed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Some tests failed" >> $GITHUB_STEP_SUMMARY
-          fi
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Generate summary
+      run: |
+        echo "# ${{ inputs.title || 'Workflow Summary' }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Add job status information
+        jobs='${{ inputs.jobs || '[]' }}'
+        echo "## Job Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Check each job result
+        if [ "${{ needs.detect-changes.result }}" = "success" ]; then
+          echo "✅ **Detect Changes**: Passed" >> $GITHUB_STEP_SUMMARY
         else
-          echo "No changes detected in any projects." >> $GITHUB_STEP_SUMMARY
+          echo "❌ **Detect Changes**: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.build.result }}" = "success" ]; then
+          echo "✅ **Build**: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Build**: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.test.result }}" = "success" ]; then
+          echo "✅ **Test**: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Test**: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Add additional content if provided
+        if [ -n "${{ inputs.additional-content }}" ]; then
+          echo "${{ inputs.additional-content }}" >> $GITHUB_STEP_SUMMARY
         fi
 
   # Fail the workflow if any required jobs failed
