@@ -61,7 +61,9 @@ jobs:
           BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
           HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
         else
-          BASE_BRANCH="main"
+          # For push events (like after merge), compare with the previous commit
+          # This will detect changes that were just merged
+          BASE_BRANCH="HEAD~1"
           HEAD_BRANCH="HEAD"
         fi
         
