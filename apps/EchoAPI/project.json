@@ -1,0 +1,43 @@
+{
+  "name": "echo-api",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/EchoAPI",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/apps/EchoAPI"],
+      "options": {
+        "command": "dotnet build apps/EchoAPI/EchoAPI.csproj --configuration Debug"
+      },
+      "configurations": {
+        "production": {
+          "options": {
+            "command": "dotnet build apps/EchoAPI/EchoAPI.csproj --configuration Release"
+          }
+        }
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "dotnet watch --project apps/EchoAPI/EchoAPI.csproj run --configuration Debug"
+      },
+      "configurations": {
+        "production": {
+          "options": {
+            "command": "dotnet watch --project apps/EchoAPI/EchoAPI.csproj run --configuration Release"
+          }
+        }
+      }
+    },
+    "test": {
+      "executor": "@nx-dotnet/core:test",
+      "options": {
+        "configuration": "Debug",
+        "project": "apps/EchoAPI/EchoAPI.csproj"
+      }
+    }
+  },
+  "tags": []
+} 

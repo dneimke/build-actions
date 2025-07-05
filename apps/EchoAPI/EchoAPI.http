@@ -1,0 +1,23 @@
+@EchoAPI_HostAddress = https://localhost:7058
+
+### Test GET endpoint
+GET {{EchoAPI_HostAddress}}/echo/Hello
+Accept: application/json
+
+### Test POST endpoint
+POST {{EchoAPI_HostAddress}}/echo
+Content-Type: application/json
+
+{
+  "message": "Hello from POST",
+  "uppercase": true
+}
+
+### Test PUT endpoint with count parameter
+PUT {{EchoAPI_HostAddress}}/echo/Hello
+Content-Type: application/json
+?count=3
+
+### Test DELETE endpoint
+DELETE {{EchoAPI_HostAddress}}/echo/GoodbyeMessage
+Accept: application/json

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IntermediateOutputPath>$(MSBuildThisFileDirectory)obj\$(MSBuildProjectName)</IntermediateOutputPath>
+    <OutputPath>$(MSBuildThisFileDirectory)bin\$(MSBuildProjectName)</OutputPath>
+    
+    <!-- Repository root directory -->
+    <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
+    
+    <!-- Disable automatic generation of assembly info attributes -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+</Project>
