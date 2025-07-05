@@ -79,7 +79,7 @@ function Build-ProjectMatrix {
         [array]$Projects
     )
     
-    $projectArray = @().
+    $projectArray = @()
     
     foreach ($project in $Projects) {
         $projectPath = Get-ProjectPath -ProjectName $project
