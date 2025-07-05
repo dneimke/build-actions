@@ -136,6 +136,12 @@ build-actions/
 └── MonoRepoSolution.sln     # Visual Studio solution
 ```
 
+
+
+## 📚 Documentation
+
+For detailed information about our CI/CD workflows, deployment processes, and GitHub Actions configuration, see the [`.github/README.md`](.github/README.md) file.
+
 ## 🛠 Development Workflow
 
 ### Building Projects
