@@ -137,6 +137,37 @@ jobs:
         echo "${{ steps.consolidate.outputs.matrix }}"
         echo "================================"
 
+    - name: Debug all outputs
+      run: |
+        echo "=== DEBUG: All Outputs ==="
+        echo "has-changes: '${{ needs.determine-changes.outputs.has-changes }}'"
+        echo "matrix: '${{ needs.determine-changes.outputs.matrix }}'"
+        echo "affected-projects: '${{ needs.determine-changes.outputs.affected-projects }}'"
+        echo "app-name: '${{ needs.determine-changes.outputs.app-name }}'"
+        echo "================================"
+
+    - name: Test matrix JSON parsing
+      run: |
+        echo "=== TESTING MATRIX JSON ==="
+        MATRIX_JSON='${{ needs.determine-changes.outputs.matrix }}'
+        echo "Raw matrix JSON: '$MATRIX_JSON'"
+        
+        if [ -n "$MATRIX_JSON" ]; then
+          echo "Matrix JSON is not empty"
+          # Test if it's valid JSON
+          if echo "$MATRIX_JSON" | jq . > /dev/null 2>&1; then
+            echo "✅ Matrix JSON is valid"
+            echo "Parsed matrix:"
+            echo "$MATRIX_JSON" | jq .
+          else
+            echo "❌ Matrix JSON is invalid"
+            echo "Raw content: $MATRIX_JSON"
+          fi
+        else
+          echo "❌ Matrix JSON is empty"
+        fi
+        echo "================================"
+
   # Download CI artifacts for deployment (automatic deployments)
   download-artifacts:
     needs: consolidate-deployment
@@ -219,8 +250,24 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
       fail-fast: false
+      # Alternative hardcoded matrix for debugging:
+      # matrix:
+      #   project:
+      #     - name: echo-api
+      #       path: apps/EchoAPI
+      #       type: webapi
     
     steps:
+    - name: Debug prepare-artifacts start
+      run: |
+        echo "=== PREPARE-ARTIFACTS DEBUG ==="
+        echo "Job started successfully!"
+        echo "Matrix: ${{ toJson(matrix) }}"
+        echo "Event name: ${{ github.event_name }}"
+        echo "Consolidate deployment has-changes: ${{ needs.consolidate-deployment.outputs.has-changes }}"
+        echo "Consolidate deployment matrix: ${{ needs.consolidate-deployment.outputs.matrix }}"
+        echo "================================"
+
     - name: Check if artifacts exist from download
       id: check-download
       run: |
@@ -372,6 +419,17 @@ jobs:
     if: always()
     
     steps:
+    - name: Debug job dependencies
+      run: |
+        echo "=== JOB DEPENDENCY DEBUG ==="
+        echo "consolidate-deployment result: ${{ needs.consolidate-deployment.result }}"
+        echo "download-artifacts result: ${{ needs.download-artifacts.result }}"
+        echo "build-for-manual-deployment result: ${{ needs.build-for-manual-deployment.result }}"
+        echo "prepare-artifacts result: ${{ needs.prepare-artifacts.result }}"
+        echo "deploy-staging result: ${{ needs.deploy-staging.result }}"
+        echo "deploy-production result: ${{ needs.deploy-production.result }}"
+        echo "================================"
+
     - name: Generate summary
       run: |
         echo "# Deployment Summary" >> $GITHUB_STEP_SUMMARY
