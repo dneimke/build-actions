@@ -89,9 +89,10 @@ jobs:
             echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "affected-projects=${{ github.event.inputs.app-name }}" >> $GITHUB_OUTPUT
             
-            # Create matrix for specific app using jq for proper JSON creation
+            # Create matrix for specific app using simple JSON creation
             APP_NAME="${{ github.event.inputs.app-name }}"
-            matrix=$(jq -n --arg name "$APP_NAME" --arg path "apps/$APP_NAME" '{"include":[{"name":$name,"path":$path,"type":"webapi"}]}')
+            # Use printf to create properly formatted JSON
+            matrix=$(printf '{"include":[{"name":"%s","path":"apps/%s","type":"webapi"}]}' "$APP_NAME" "$APP_NAME")
             echo "matrix=$matrix" >> $GITHUB_OUTPUT
           else
             # Deploy all apps
