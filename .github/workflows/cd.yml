@@ -118,7 +118,6 @@ jobs:
         echo "=== DEBUG: Matrix Input ==="
         echo "Raw matrix from determine-changes:"
         echo "${{ needs.determine-changes.outputs.matrix }}"
-        echo "Matrix length: ${{ length(needs.determine-changes.outputs.matrix) }}"
         echo "================================"
 
     - name: Consolidate outputs
@@ -133,7 +132,6 @@ jobs:
         echo "=== DEBUG: Matrix Output ==="
         echo "Final matrix output:"
         echo "${{ steps.consolidate.outputs.matrix }}"
-        echo "Matrix length: ${{ length(steps.consolidate.outputs.matrix) }}"
         echo "================================"
 
   # Download CI artifacts for deployment (automatic deployments)
