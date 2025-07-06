@@ -83,7 +83,7 @@ jobs:
         
         echo "✅ Nx restore completed"
 
-        - name: Debug project assets
+    - name: Debug project assets
       run: |
         echo "=== DEBUG: Project Assets ==="
         find . -name "*.csproj" -type f | while read -r project; do
