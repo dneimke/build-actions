@@ -146,6 +146,7 @@ deployment:
   "apps": {
     "echo-api": {
       "type": "webapi",
+      "path": "apps/EchoAPI",
       "environments": ["dev", "staging", "prod"],
       "deployment": {
         "type": "azure-app-service"

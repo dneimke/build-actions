@@ -140,7 +140,12 @@ build-actions/
 
 ## 📚 Documentation
 
-For detailed information about our CI/CD workflows, deployment processes, and GitHub Actions configuration, see the [`.github/README.md`](.github/README.md) file.
+For detailed information about our CI/CD workflows, deployment processes, and GitHub Actions configuration, see the following documentation:
+
+- **[CI/CD Strategy](docs/ci-cd-strategy.md)** - Overview of our CI/CD pipeline and development workflow
+- **[Testing Strategy](docs/ci-pipeline-testing-strategy.md)** - Testing approach and coverage requirements
+- **[Setup Requirements](docs/github-setup-requirements.md)** - GitHub Actions setup and configuration
+- **[Implementation Summary](docs/phase1-implementation-summary.md)** - Current implementation status
 
 ## 🛠 Development Workflow
 
