@@ -312,7 +312,12 @@ jobs:
        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+      # matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}  
+      matrix:
+        project:
+          - name: echo-api
+            path: apps/EchoAPI
+            type: webapi
       fail-fast: false
     
     steps:
@@ -326,12 +331,12 @@ jobs:
         name: ${{ matrix.project.name }}-final-artifacts
         path: ./artifacts
 
-    - name: Deploy to Azure App Service
-      uses: azure/webapps-deploy@v3
-      with:
-        app-name: ${{ matrix.project.name }}
-        package: ./artifacts
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+    # - name: Deploy to Azure App Service
+    #   uses: azure/webapps-deploy@v3
+    #   with:
+    #     app-name: ${{ matrix.project.name }}
+    #     package: ./artifacts
+    #     publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
 
     - name: Health check
       run: |
