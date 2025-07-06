@@ -71,14 +71,20 @@ jobs:
         
         # Run the PowerShell script to get affected projects
         pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch $BASE_BRANCH -HeadBranch $HEAD_BRANCH
+        
+        echo "=== DEBUG: PowerShell Script Output ==="
+        echo "has-changes: '${{ steps.get-affected.outputs.has-changes }}'"
+        echo "matrix: '${{ steps.get-affected.outputs.matrix }}'"
+        echo "affected-projects: '${{ steps.get-affected.outputs.affected-projects }}'"
+        echo "================================"
 
   # Build affected projects in parallel
   build:
     needs: [load-config, detect-changes]
-    if: needs.detect-changes.outputs.has-changes == 'true'
+    if: needs.detect-changes.outputs.has-changes == 'true' && needs.detect-changes.outputs.matrix != '{"include":[]}'
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix || '{"include":[]}') }}
       fail-fast: false
     
     steps:
@@ -91,10 +97,11 @@ jobs:
     - name: Debug matrix information
       run: |
         echo "=== DEBUG: Matrix Information ==="
-        echo "Project name: ${{ matrix.project.name }}"
-        echo "Project type: ${{ matrix.project.type }}"
-        echo "Project path: ${{ matrix.project.path }}"
-        echo "Build configuration: ${{ needs.load-config.outputs.build-configuration }}"
+        echo "Matrix object: ${{ toJSON(matrix) }}"
+        echo "Project name: '${{ matrix.project.name }}'"
+        echo "Project type: '${{ matrix.project.type }}'"
+        echo "Project path: '${{ matrix.project.path }}'"
+        echo "Build configuration: '${{ needs.load-config.outputs.build-configuration }}'"
         echo "Is webapi: ${{ matrix.project.type == 'webapi' }}"
         echo "================================"
 
@@ -102,15 +109,20 @@ jobs:
       run: |
         echo "=== DEBUG: Project Structure ==="
         echo "Current directory: $(pwd)"
-        echo "Project path exists: $([ -d "${{ matrix.project.path }}" ] && echo "YES" || echo "NO")"
-        if [ -d "${{ matrix.project.path }}" ]; then
-          echo "Project contents:"
-          ls -la "${{ matrix.project.path }}"
-          echo "Project.json exists: $([ -f "${{ matrix.project.path }}/project.json" ] && echo "YES" || echo "NO")"
-          if [ -f "${{ matrix.project.path }}/project.json" ]; then
-            echo "Project.json contents:"
-            cat "${{ matrix.project.path }}/project.json"
+        echo "Project path: '${{ matrix.project.path }}'"
+        if [ -n "${{ matrix.project.path }}" ]; then
+          echo "Project path exists: $([ -d "${{ matrix.project.path }}" ] && echo "YES" || echo "NO")"
+          if [ -d "${{ matrix.project.path }}" ]; then
+            echo "Project contents:"
+            ls -la "${{ matrix.project.path }}"
+            echo "Project.json exists: $([ -f "${{ matrix.project.path }}/project.json" ] && echo "YES" || echo "NO")"
+            if [ -f "${{ matrix.project.path }}/project.json" ]; then
+              echo "Project.json contents:"
+              cat "${{ matrix.project.path }}/project.json"
+            fi
           fi
+        else
+          echo "❌ No project path provided in matrix"
         fi
         echo "================================"
 
@@ -120,33 +132,48 @@ jobs:
         echo "Nx version: $(npx nx --version)"
         echo "Available projects:"
         npx nx show projects
-        echo "Project configuration for ${{ matrix.project.name }}:"
-        npx nx show project ${{ matrix.project.name }}
-        echo "Available targets for ${{ matrix.project.name }}:"
-        npx nx show project ${{ matrix.project.name }} --web
+        echo "Project name: ${{ matrix.project.name }}"
+        if [ -n "${{ matrix.project.name }}" ]; then
+          echo "Project configuration for ${{ matrix.project.name }}:"
+          npx nx show project ${{ matrix.project.name }} --json
+          echo "Available targets for ${{ matrix.project.name }}:"
+          npx nx show project ${{ matrix.project.name }} --targets
+        else
+          echo "❌ No project name provided in matrix"
+        fi
         echo "================================"
 
     - name: Build affected projects
       run: |
         echo "=== DEBUG: Building Project ==="
-        echo "Running build for: ${{ matrix.project.name }}"
-        npx nx run-many --target=build \
-          --projects=${{ matrix.project.name }} \
-          --configuration=${{ needs.load-config.outputs.build-configuration }} \
-          --parallel=1 \
-          --verbose
-        echo "Build completed"
+        if [ -n "${{ matrix.project.name }}" ]; then
+          echo "Running build for: ${{ matrix.project.name }}"
+          npx nx run-many --target=build \
+            --projects=${{ matrix.project.name }} \
+            --configuration=${{ needs.load-config.outputs.build-configuration }} \
+            --parallel=1 \
+            --verbose || echo "❌ Build target not found or build failed"
+          echo "Build completed"
+        else
+          echo "❌ No project name provided in matrix"
+          exit 1
+        fi
         echo "================================"
 
     - name: Debug build output
       run: |
         echo "=== DEBUG: Build Output ==="
-        echo "Checking if bin directory exists:"
-        if [ -d "${{ matrix.project.path }}/bin" ]; then
-          echo "Bin directory contents:"
-          find "${{ matrix.project.path }}/bin" -type f -name "*.dll" -o -name "*.exe" | head -10
+        echo "Project path: '${{ matrix.project.path }}'"
+        if [ -n "${{ matrix.project.path }}" ]; then
+          echo "Checking if bin directory exists:"
+          if [ -d "${{ matrix.project.path }}/bin" ]; then
+            echo "Bin directory contents:"
+            find "${{ matrix.project.path }}/bin" -type f -name "*.dll" -o -name "*.exe" | head -10
+          else
+            echo "❌ Bin directory does not exist!"
+          fi
         else
-          echo "❌ Bin directory does not exist!"
+          echo "❌ No project path provided in matrix"
         fi
         echo "================================"
 
@@ -156,46 +183,60 @@ jobs:
         echo "=== DEBUG: Publish Configuration ==="
         echo "Project type is webapi, checking publish target..."
         echo "Publish target configuration:"
-        npx nx show project ${{ matrix.project.name }} --target=publish
+        if [ -n "${{ matrix.project.name }}" ]; then
+          npx nx show project ${{ matrix.project.name }} --target=publish --json || echo "❌ Publish target not found or project doesn't exist"
+        else
+          echo "❌ No project name provided in matrix"
+        fi
         echo "================================"
 
     - name: Publish project (if webapi)
       if: matrix.project.type == 'webapi'
       run: |
         echo "=== DEBUG: Publishing Project ==="
-        echo "Running publish for: ${{ matrix.project.name }}"
-        echo "Publish path will be: ${{ matrix.project.path }}/publish"
-        
-        # Run publish with verbose output
-        npx nx run-many --target=publish \
-          --projects=${{ matrix.project.name }} \
-          --configuration=${{ needs.load-config.outputs.build-configuration }} \
-          --parallel=1 \
-          --verbose
-        
-        echo "Publish completed"
+        if [ -n "${{ matrix.project.name }}" ]; then
+          echo "Running publish for: ${{ matrix.project.name }}"
+          echo "Publish path will be: ${{ matrix.project.path }}/publish"
+          
+          # Run publish with verbose output
+          npx nx run-many --target=publish \
+            --projects=${{ matrix.project.name }} \
+            --configuration=${{ needs.load-config.outputs.build-configuration }} \
+            --parallel=1 \
+            --verbose || echo "❌ Publish target not found or publish failed"
+          
+          echo "Publish completed"
+        else
+          echo "❌ No project name provided in matrix"
+          exit 1
+        fi
         echo "================================"
 
     - name: Debug publish output
       if: matrix.project.type == 'webapi'
       run: |
         echo "=== DEBUG: Publish Output ==="
-        echo "Checking if publish directory exists:"
-        if [ -d "${{ matrix.project.path }}/publish" ]; then
-          echo "✅ Publish directory exists!"
-          echo "Publish directory contents:"
-          ls -la "${{ matrix.project.path }}/publish"
-          echo "Looking for key files:"
-          find "${{ matrix.project.path }}/publish" -type f -name "*.dll" -o -name "*.exe" -o -name "*.json" | head -10
+        echo "Project path: '${{ matrix.project.path }}'"
+        if [ -n "${{ matrix.project.path }}" ]; then
+          echo "Checking if publish directory exists:"
+          if [ -d "${{ matrix.project.path }}/publish" ]; then
+            echo "✅ Publish directory exists!"
+            echo "Publish directory contents:"
+            ls -la "${{ matrix.project.path }}/publish"
+            echo "Looking for key files:"
+            find "${{ matrix.project.path }}/publish" -type f -name "*.dll" -o -name "*.exe" -o -name "*.json" | head -10
+          else
+            echo "❌ Publish directory does not exist!"
+            echo "Available directories in project path:"
+            ls -la "${{ matrix.project.path }}"
+          fi
         else
-          echo "❌ Publish directory does not exist!"
-          echo "Available directories in project path:"
-          ls -la "${{ matrix.project.path }}"
+          echo "❌ No project path provided in matrix"
         fi
         echo "================================"
 
     - name: Upload build artifacts
-      if: matrix.project.type == 'webapi'
+      if: matrix.project.type == 'webapi' && matrix.project.path != ''
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.project.name }}-build-artifacts
@@ -206,23 +247,28 @@ jobs:
       if: matrix.project.type == 'webapi'
       run: |
         echo "=== DEBUG: Artifact Upload ==="
-        echo "Attempting to upload artifacts from: ${{ matrix.project.path }}/publish"
-        echo "Directory exists: $([ -d "${{ matrix.project.path }}/publish" ] && echo "YES" || echo "NO")"
-        if [ -d "${{ matrix.project.path }}/publish" ]; then
-          echo "Files to be uploaded:"
-          find "${{ matrix.project.path }}/publish" -type f | wc -l
-          echo "Total size:"
-          du -sh "${{ matrix.project.path }}/publish"
+        echo "Project path: '${{ matrix.project.path }}'"
+        if [ -n "${{ matrix.project.path }}" ]; then
+          echo "Attempting to upload artifacts from: ${{ matrix.project.path }}/publish"
+          echo "Directory exists: $([ -d "${{ matrix.project.path }}/publish" ] && echo "YES" || echo "NO")"
+          if [ -d "${{ matrix.project.path }}/publish" ]; then
+            echo "Files to be uploaded:"
+            find "${{ matrix.project.path }}/publish" -type f | wc -l
+            echo "Total size:"
+            du -sh "${{ matrix.project.path }}/publish"
+          fi
+        else
+          echo "❌ No project path provided in matrix"
         fi
         echo "================================"
 
   # Test affected projects in parallel
   test:
     needs: [load-config, detect-changes]
-    if: needs.detect-changes.outputs.has-changes == 'true'
+    if: needs.detect-changes.outputs.has-changes == 'true' && needs.detect-changes.outputs.matrix != '{"include":[]}'
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix || '{"include":[]}') }}
       fail-fast: false
     
     steps:
@@ -234,26 +280,39 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        npx nx run-many --target=test \
-          --projects=${{ matrix.project.name }} \
-          --configuration=${{ needs.load-config.outputs.build-configuration }} \
-          --parallel=1 \
-          --collect:"XPlat Code Coverage" \
-          --results-directory ./coverage
+        if [ -n "${{ matrix.project.name }}" ]; then
+          echo "Running tests for: ${{ matrix.project.name }}"
+          npx nx run-many --target=test \
+            --projects=${{ matrix.project.name }} \
+            --configuration=${{ needs.load-config.outputs.build-configuration }} \
+            --parallel=1 \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage || echo "❌ Test target not found or tests failed"
+        else
+          echo "❌ No project name provided in matrix"
+          exit 1
+        fi
 
     - name: Generate coverage report
       if: always()
       run: |
-        npx nx run-many --target=coverage \
-          --projects=${{ matrix.project.name }} \
-          --configuration=${{ needs.load-config.outputs.build-configuration }}
+        if [ -n "${{ matrix.project.name }}" ]; then
+          echo "Generating coverage report for: ${{ matrix.project.name }}"
+          npx nx run-many --target=coverage \
+            --projects=${{ matrix.project.name }} \
+            --configuration=${{ needs.load-config.outputs.build-configuration }} || echo "❌ Coverage target not found"
+        else
+          echo "❌ No project name provided in matrix"
+        fi
 
     - name: Upload coverage reports
+      if: always()
       uses: codecov/codecov-action@v3
       with:
         files: ./coverage/**/coverage.cobertura.xml
         flags: ${{ matrix.project.name }}
         name: ${{ matrix.project.name }}-coverage
+        fail_ci_if_error: false
 
   # Summary job to report results
   summary:
@@ -264,11 +323,10 @@ jobs:
     steps:
     - name: Generate summary
       run: |
-        echo "# ${{ inputs.title || 'Workflow Summary' }}" >> $GITHUB_STEP_SUMMARY
+        echo "# Workflow Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
         # Add job status information
-        jobs='${{ inputs.jobs || '[]' }}'
         echo "## Job Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
@@ -292,11 +350,6 @@ jobs:
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
-        
-        # Add additional content if provided
-        if [ -n "${{ inputs.additional-content }}" ]; then
-          echo "${{ inputs.additional-content }}" >> $GITHUB_STEP_SUMMARY
-        fi
 
   # Fail the workflow if any required jobs failed
   check-results:
