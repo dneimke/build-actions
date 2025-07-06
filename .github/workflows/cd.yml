@@ -89,27 +89,18 @@ jobs:
             echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "affected-projects=${{ github.event.inputs.app-name }}" >> $GITHUB_OUTPUT
             
-            # Create matrix for specific app - use explicit JSON creation
+            # Create matrix for specific app - use a more robust approach
             APP_NAME="${{ github.event.inputs.app-name }}"
-            # For now, only support EchoAPI to avoid JSON issues
-            if [ "$APP_NAME" = "EchoAPI" ]; then
-              # Create JSON with explicit quotes and escaping
-              MATRIX_JSON='{"include":[{"name":"EchoAPI","path":"apps/EchoAPI","type":"webapi"}]}'
-              echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-              echo "DEBUG: Created matrix JSON: $MATRIX_JSON" >&2
-            else
-              echo "Error: Only EchoAPI is supported for manual deployment at this time" >&2
-              exit 1
-            fi
+            # Create JSON using a different method that preserves quotes
+            echo "matrix={\"include\":[{\"name\":\"$APP_NAME\",\"path\":\"apps/$APP_NAME\",\"type\":\"webapi\"}]}" >> $GITHUB_OUTPUT
+            echo "DEBUG: App name is: $APP_NAME" >&2
           else
             # Deploy all apps
             echo "Manual deployment for all apps"
             echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "affected-projects=EchoAPI" >> $GITHUB_OUTPUT
             
-            MATRIX_JSON='{"include":[{"name":"EchoAPI","path":"apps/EchoAPI","type":"webapi"}]}'
-            echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-            echo "DEBUG: Created matrix JSON: $MATRIX_JSON" >&2
+            echo "matrix={\"include\":[{\"name\":\"EchoAPI\",\"path\":\"apps/EchoAPI\",\"type\":\"webapi\"}]}" >> $GITHUB_OUTPUT
           fi
         fi
 
