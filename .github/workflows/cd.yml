@@ -321,6 +321,11 @@ jobs:
       fail-fast: false
     
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
     - name: Load workflow configuration
       id: config
       uses: ./.github/actions/load-config
@@ -379,6 +384,11 @@ jobs:
       fail-fast: false
     
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
     - name: Load workflow configuration
       id: config
       uses: ./.github/actions/load-config
