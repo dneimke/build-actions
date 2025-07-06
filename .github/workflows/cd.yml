@@ -51,6 +51,7 @@ jobs:
       has-changes: ${{ steps.get-affected.outputs.has-changes }}
       matrix: ${{ steps.get-affected.outputs.matrix }}
       affected-projects: ${{ steps.get-affected.outputs.affected-projects }}
+      app-name: ${{ steps.get-affected.outputs.app-name }}
     
     steps:
     - name: Checkout code
@@ -81,6 +82,9 @@ jobs:
           
           # Run the PowerShell script to get affected projects
           pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch $PREVIOUS_COMMIT -HeadBranch $CI_COMMIT_SHA
+          
+          # For automatic deployments, set a default app-name (will be overridden by PowerShell script if it outputs one)
+          echo "app-name=EchoAPI" >> $GITHUB_OUTPUT
         else
           # For manual dispatch, use the specified app or all apps
           if [ -n "${{ github.event.inputs.app-name }}" ]; then
@@ -106,6 +110,7 @@ jobs:
       has-changes: ${{ steps.consolidate.outputs.has-changes }}
       matrix: ${{ steps.consolidate.outputs.matrix }}
       affected-projects: ${{ steps.consolidate.outputs.affected-projects }}
+      app-name: ${{ steps.consolidate.outputs.app-name }}
     
     steps:
     - name: Debug matrix input
@@ -121,6 +126,7 @@ jobs:
         echo "has-changes=${{ needs.determine-changes.outputs.has-changes }}" >> $GITHUB_OUTPUT
         echo "matrix=${{ needs.determine-changes.outputs.matrix }}" >> $GITHUB_OUTPUT
         echo "affected-projects=${{ needs.determine-changes.outputs.affected-projects }}" >> $GITHUB_OUTPUT
+        echo "app-name=${{ needs.determine-changes.outputs.app-name }}" >> $GITHUB_OUTPUT
 
     - name: Debug matrix output
       run: |
@@ -136,7 +142,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+        project:
+          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
+            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
+            type: webapi
       fail-fast: false
     
     steps:
@@ -159,7 +168,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ${{ fromJson(format('{{"include":[{{"name":"{0}","path":"apps/{0}","type":"webapi"}}]}}', needs.consolidate-deployment.outputs.app-name)) }}
+        project:
+          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
+            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
+            type: webapi
       fail-fast: false
     
     steps:
@@ -203,7 +215,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ${{ fromJson(format('{{"include":[{{"name":"{0}","path":"apps/{0}","type":"webapi"}}]}}', needs.consolidate-deployment.outputs.app-name)) }}
+        project:
+          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
+            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
+            type: webapi
       fail-fast: false
     
     steps:
@@ -246,7 +261,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ${{ fromJson(format('{{"include":[{{"name":"{0}","path":"apps/{0}","type":"webapi"}}]}}', needs.consolidate-deployment.outputs.app-name)) }}
+        project:
+          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
+            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
+            type: webapi
       fail-fast: false
     
     steps:
@@ -305,7 +323,10 @@ jobs:
     environment: ${{ needs.load-config.outputs.production-environment }}
     strategy:
       matrix:
-        project: ${{ fromJson(format('{{"include":[{{"name":"{0}","path":"apps/{0}","type":"webapi"}}]}}', needs.consolidate-deployment.outputs.app-name)) }}
+        project:
+          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
+            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
+            type: webapi
       fail-fast: false
     
     steps:
