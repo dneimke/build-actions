@@ -39,6 +39,11 @@ function Get-AffectedProjects {
         Write-Host "Nx output: $affectedOutput"
         Write-Host "Exit code: $LASTEXITCODE"
         
+        # Debug: Also try without --affected to see all projects
+        Write-Host "Debug: All projects:"
+        $allProjects = npx nx show projects --json 2>&1
+        Write-Host "All projects output: $allProjects"
+        
         if ($LASTEXITCODE -eq 0 -and $affectedOutput) {
             $affectedProjects = $affectedOutput | ConvertFrom-Json
             return $affectedProjects
@@ -193,6 +198,14 @@ Write-Host ($matrix | ConvertTo-Json -Depth 10)
 $matrixJson = $matrix | ConvertTo-Json -Depth 10 -Compress
 
 Write-Host "Matrix JSON generated: $matrixJson"
+
+# Debug: Show the actual matrix structure
+Write-Host "Matrix structure debug:"
+Write-Host "Matrix.include count: $($matrix.include.Count)"
+if ($matrix.include.Count -gt 0) {
+    Write-Host "First project in matrix:"
+    $matrix.include[0] | ConvertTo-Json
+}
 
 # Validate JSON
 try {

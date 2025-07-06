@@ -71,14 +71,20 @@ jobs:
         
         # Run the PowerShell script to get affected projects
         pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch $BASE_BRANCH -HeadBranch $HEAD_BRANCH
+        
+        echo "=== DEBUG: PowerShell Script Output ==="
+        echo "has-changes: '${{ steps.get-affected.outputs.has-changes }}'"
+        echo "matrix: '${{ steps.get-affected.outputs.matrix }}'"
+        echo "affected-projects: '${{ steps.get-affected.outputs.affected-projects }}'"
+        echo "================================"
 
   # Build affected projects in parallel
   build:
     needs: [load-config, detect-changes]
-    if: needs.detect-changes.outputs.has-changes == 'true'
+    if: needs.detect-changes.outputs.has-changes == 'true' && needs.detect-changes.outputs.matrix != '{"include":[]}'
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix || '{"include":[]}') }}
       fail-fast: false
     
     steps:
@@ -91,11 +97,13 @@ jobs:
     - name: Debug matrix information
       run: |
         echo "=== DEBUG: Matrix Information ==="
-        echo "Project name: ${{ matrix.project.name }}"
-        echo "Project type: ${{ matrix.project.type }}"
-        echo "Project path: ${{ matrix.project.path }}"
-        echo "Build configuration: ${{ needs.load-config.outputs.build-configuration }}"
+        echo "Matrix object: ${{ toJSON(matrix) }}"
+        echo "Project name: '${{ matrix.project.name }}'"
+        echo "Project type: '${{ matrix.project.type }}'"
+        echo "Project path: '${{ matrix.project.path }}'"
+        echo "Build configuration: '${{ needs.load-config.outputs.build-configuration }}'"
         echo "Is webapi: ${{ matrix.project.type == 'webapi' }}"
+        echo "Matrix keys: ${{ keys(matrix) }}"
         echo "================================"
 
     - name: Debug project structure
@@ -238,10 +246,10 @@ jobs:
   # Test affected projects in parallel
   test:
     needs: [load-config, detect-changes]
-    if: needs.detect-changes.outputs.has-changes == 'true'
+    if: needs.detect-changes.outputs.has-changes == 'true' && needs.detect-changes.outputs.matrix != '{"include":[]}'
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix || '{"include":[]}') }}
       fail-fast: false
     
     steps:
