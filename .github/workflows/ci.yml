@@ -109,6 +109,11 @@ jobs:
       run: |
         echo "=== DEBUG: Project Structure ==="
         echo "Current directory: $(pwd)"
+        echo "Testing Shared.csproj path:"
+        echo "Relative path exists: $([ -f "libs/shared/Shared.csproj" ] && echo "YES" || echo "NO")"
+        echo "Absolute path: $(pwd)/libs/shared/Shared.csproj"
+        echo "Absolute path exists: $([ -f "$(pwd)/libs/shared/Shared.csproj" ] && echo "YES" || echo "NO")"
+        echo ""
         echo "Project path: '${{ matrix.project.path }}'"
         if [ -n "${{ matrix.project.path }}" ]; then
           echo "Project path exists: $([ -d "${{ matrix.project.path }}" ] && echo "YES" || echo "NO")"
