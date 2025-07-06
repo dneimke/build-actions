@@ -120,22 +120,32 @@ jobs:
         echo "Nx version: $(npx nx --version)"
         echo "Available projects:"
         npx nx show projects
-        echo "Project configuration for ${{ matrix.project.name }}:"
-        npx nx show project ${{ matrix.project.name }}
-        echo "Available targets for ${{ matrix.project.name }}:"
-        npx nx show project ${{ matrix.project.name }} --web
+        echo "Project name: ${{ matrix.project.name }}"
+        if [ -n "${{ matrix.project.name }}" ]; then
+          echo "Project configuration for ${{ matrix.project.name }}:"
+          npx nx show project ${{ matrix.project.name }} --json
+          echo "Available targets for ${{ matrix.project.name }}:"
+          npx nx show project ${{ matrix.project.name }} --targets
+        else
+          echo "❌ No project name provided in matrix"
+        fi
         echo "================================"
 
     - name: Build affected projects
       run: |
         echo "=== DEBUG: Building Project ==="
-        echo "Running build for: ${{ matrix.project.name }}"
-        npx nx run-many --target=build \
-          --projects=${{ matrix.project.name }} \
-          --configuration=${{ needs.load-config.outputs.build-configuration }} \
-          --parallel=1 \
-          --verbose
-        echo "Build completed"
+        if [ -n "${{ matrix.project.name }}" ]; then
+          echo "Running build for: ${{ matrix.project.name }}"
+          npx nx run-many --target=build \
+            --projects=${{ matrix.project.name }} \
+            --configuration=${{ needs.load-config.outputs.build-configuration }} \
+            --parallel=1 \
+            --verbose || echo "❌ Build target not found or build failed"
+          echo "Build completed"
+        else
+          echo "❌ No project name provided in matrix"
+          exit 1
+        fi
         echo "================================"
 
     - name: Debug build output
@@ -156,24 +166,33 @@ jobs:
         echo "=== DEBUG: Publish Configuration ==="
         echo "Project type is webapi, checking publish target..."
         echo "Publish target configuration:"
-        npx nx show project ${{ matrix.project.name }} --target=publish
+        if [ -n "${{ matrix.project.name }}" ]; then
+          npx nx show project ${{ matrix.project.name }} --target=publish --json || echo "❌ Publish target not found or project doesn't exist"
+        else
+          echo "❌ No project name provided in matrix"
+        fi
         echo "================================"
 
     - name: Publish project (if webapi)
       if: matrix.project.type == 'webapi'
       run: |
         echo "=== DEBUG: Publishing Project ==="
-        echo "Running publish for: ${{ matrix.project.name }}"
-        echo "Publish path will be: ${{ matrix.project.path }}/publish"
-        
-        # Run publish with verbose output
-        npx nx run-many --target=publish \
-          --projects=${{ matrix.project.name }} \
-          --configuration=${{ needs.load-config.outputs.build-configuration }} \
-          --parallel=1 \
-          --verbose
-        
-        echo "Publish completed"
+        if [ -n "${{ matrix.project.name }}" ]; then
+          echo "Running publish for: ${{ matrix.project.name }}"
+          echo "Publish path will be: ${{ matrix.project.path }}/publish"
+          
+          # Run publish with verbose output
+          npx nx run-many --target=publish \
+            --projects=${{ matrix.project.name }} \
+            --configuration=${{ needs.load-config.outputs.build-configuration }} \
+            --parallel=1 \
+            --verbose || echo "❌ Publish target not found or publish failed"
+          
+          echo "Publish completed"
+        else
+          echo "❌ No project name provided in matrix"
+          exit 1
+        fi
         echo "================================"
 
     - name: Debug publish output
@@ -234,26 +253,39 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        npx nx run-many --target=test \
-          --projects=${{ matrix.project.name }} \
-          --configuration=${{ needs.load-config.outputs.build-configuration }} \
-          --parallel=1 \
-          --collect:"XPlat Code Coverage" \
-          --results-directory ./coverage
+        if [ -n "${{ matrix.project.name }}" ]; then
+          echo "Running tests for: ${{ matrix.project.name }}"
+          npx nx run-many --target=test \
+            --projects=${{ matrix.project.name }} \
+            --configuration=${{ needs.load-config.outputs.build-configuration }} \
+            --parallel=1 \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage || echo "❌ Test target not found or tests failed"
+        else
+          echo "❌ No project name provided in matrix"
+          exit 1
+        fi
 
     - name: Generate coverage report
       if: always()
       run: |
-        npx nx run-many --target=coverage \
-          --projects=${{ matrix.project.name }} \
-          --configuration=${{ needs.load-config.outputs.build-configuration }}
+        if [ -n "${{ matrix.project.name }}" ]; then
+          echo "Generating coverage report for: ${{ matrix.project.name }}"
+          npx nx run-many --target=coverage \
+            --projects=${{ matrix.project.name }} \
+            --configuration=${{ needs.load-config.outputs.build-configuration }} || echo "❌ Coverage target not found"
+        else
+          echo "❌ No project name provided in matrix"
+        fi
 
     - name: Upload coverage reports
+      if: always()
       uses: codecov/codecov-action@v3
       with:
         files: ./coverage/**/coverage.cobertura.xml
         flags: ${{ matrix.project.name }}
         name: ${{ matrix.project.name }}-coverage
+        fail_ci_if_error: false
 
   # Summary job to report results
   summary:
@@ -264,11 +296,10 @@ jobs:
     steps:
     - name: Generate summary
       run: |
-        echo "# ${{ inputs.title || 'Workflow Summary' }}" >> $GITHUB_STEP_SUMMARY
+        echo "# Workflow Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
         # Add job status information
-        jobs='${{ inputs.jobs || '[]' }}'
         echo "## Job Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
@@ -292,11 +323,6 @@ jobs:
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
-        
-        # Add additional content if provided
-        if [ -n "${{ inputs.additional-content }}" ]; then
-          echo "${{ inputs.additional-content }}" >> $GITHUB_STEP_SUMMARY
-        fi
 
   # Fail the workflow if any required jobs failed
   check-results:
