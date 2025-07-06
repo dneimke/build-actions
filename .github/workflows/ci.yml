@@ -109,15 +109,20 @@ jobs:
       run: |
         echo "=== DEBUG: Project Structure ==="
         echo "Current directory: $(pwd)"
-        echo "Project path exists: $([ -d "${{ matrix.project.path }}" ] && echo "YES" || echo "NO")"
-        if [ -d "${{ matrix.project.path }}" ]; then
-          echo "Project contents:"
-          ls -la "${{ matrix.project.path }}"
-          ec.s: $([ -f "${{ matrix.project.path }}/project.json" ] && echo "YES" || echo "NO")"
-          if [ -f "${{ matrix.project.path }}/project.json" ]; then
-            echo "Project.json contents:"
-            cat "${{ matrix.project.path }}/project.json"
+        echo "Project path: '${{ matrix.project.path }}'"
+        if [ -n "${{ matrix.project.path }}" ]; then
+          echo "Project path exists: $([ -d "${{ matrix.project.path }}" ] && echo "YES" || echo "NO")"
+          if [ -d "${{ matrix.project.path }}" ]; then
+            echo "Project contents:"
+            ls -la "${{ matrix.project.path }}"
+            echo "Project.json exists: $([ -f "${{ matrix.project.path }}/project.json" ] && echo "YES" || echo "NO")"
+            if [ -f "${{ matrix.project.path }}/project.json" ]; then
+              echo "Project.json contents:"
+              cat "${{ matrix.project.path }}/project.json"
+            fi
           fi
+        else
+          echo "❌ No project path provided in matrix"
         fi
         echo "================================"
 
@@ -158,12 +163,17 @@ jobs:
     - name: Debug build output
       run: |
         echo "=== DEBUG: Build Output ==="
-        echo "Checking if bin directory exists:"
-        if [ -d "${{ matrix.project.path }}/bin" ]; then
-          echo "Bin directory contents:"
-          find "${{ matrix.project.path }}/bin" -type f -name "*.dll" -o -name "*.exe" | head -10
+        echo "Project path: '${{ matrix.project.path }}'"
+        if [ -n "${{ matrix.project.path }}" ]; then
+          echo "Checking if bin directory exists:"
+          if [ -d "${{ matrix.project.path }}/bin" ]; then
+            echo "Bin directory contents:"
+            find "${{ matrix.project.path }}/bin" -type f -name "*.dll" -o -name "*.exe" | head -10
+          else
+            echo "❌ Bin directory does not exist!"
+          fi
         else
-          echo "❌ Bin directory does not exist!"
+          echo "❌ No project path provided in matrix"
         fi
         echo "================================"
 
@@ -206,22 +216,27 @@ jobs:
       if: matrix.project.type == 'webapi'
       run: |
         echo "=== DEBUG: Publish Output ==="
-        echo "Checking if publish directory exists:"
-        if [ -d "${{ matrix.project.path }}/publish" ]; then
-          echo "✅ Publish directory exists!"
-          echo "Publish directory contents:"
-          ls -la "${{ matrix.project.path }}/publish"
-          echo "Looking for key files:"
-          find "${{ matrix.project.path }}/publish" -type f -name "*.dll" -o -name "*.exe" -o -name "*.json" | head -10
+        echo "Project path: '${{ matrix.project.path }}'"
+        if [ -n "${{ matrix.project.path }}" ]; then
+          echo "Checking if publish directory exists:"
+          if [ -d "${{ matrix.project.path }}/publish" ]; then
+            echo "✅ Publish directory exists!"
+            echo "Publish directory contents:"
+            ls -la "${{ matrix.project.path }}/publish"
+            echo "Looking for key files:"
+            find "${{ matrix.project.path }}/publish" -type f -name "*.dll" -o -name "*.exe" -o -name "*.json" | head -10
+          else
+            echo "❌ Publish directory does not exist!"
+            echo "Available directories in project path:"
+            ls -la "${{ matrix.project.path }}"
+          fi
         else
-          echo "❌ Publish directory does not exist!"
-          echo "Available directories in project path:"
-          ls -la "${{ matrix.project.path }}"
+          echo "❌ No project path provided in matrix"
         fi
         echo "================================"
 
     - name: Upload build artifacts
-      if: matrix.project.type == 'webapi'
+      if: matrix.project.type == 'webapi' && matrix.project.path != ''
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.project.name }}-build-artifacts
@@ -232,13 +247,18 @@ jobs:
       if: matrix.project.type == 'webapi'
       run: |
         echo "=== DEBUG: Artifact Upload ==="
-        echo "Attempting to upload artifacts from: ${{ matrix.project.path }}/publish"
-        echo "Directory exists: $([ -d "${{ matrix.project.path }}/publish" ] && echo "YES" || echo "NO")"
-        if [ -d "${{ matrix.project.path }}/publish" ]; then
-          echo "Files to be uploaded:"
-          find "${{ matrix.project.path }}/publish" -type f | wc -l
-          echo "Total size:"
-          du -sh "${{ matrix.project.path }}/publish"
+        echo "Project path: '${{ matrix.project.path }}'"
+        if [ -n "${{ matrix.project.path }}" ]; then
+          echo "Attempting to upload artifacts from: ${{ matrix.project.path }}/publish"
+          echo "Directory exists: $([ -d "${{ matrix.project.path }}/publish" ] && echo "YES" || echo "NO")"
+          if [ -d "${{ matrix.project.path }}/publish" ]; then
+            echo "Files to be uploaded:"
+            find "${{ matrix.project.path }}/publish" -type f | wc -l
+            echo "Total size:"
+            du -sh "${{ matrix.project.path }}/publish"
+          fi
+        else
+          echo "❌ No project path provided in matrix"
         fi
         echo "================================"
 

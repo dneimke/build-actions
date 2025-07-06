@@ -104,9 +104,11 @@ function Build-ProjectMatrix {
         }
         
         $projectInfo = @{
-            name = $project
-            path = $projectPath
-            type = $projectType
+            project = @{
+                name = $project
+                path = $projectPath
+                type = $projectType
+            }
         }
         
         $projectArray += $projectInfo
