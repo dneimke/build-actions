@@ -108,7 +108,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.project.name }}-build-artifacts
-        path: ./publish/${{ matrix.project.name }}
+        path: ${{ matrix.project.path }}/publish
         retention-days: 30
 
   # Test affected projects in parallel

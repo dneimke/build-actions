@@ -4,8 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <IntermediateOutputPath>$(MSBuildThisFileDirectory)obj\$(MSBuildProjectName)</IntermediateOutputPath>
-    <OutputPath>$(MSBuildThisFileDirectory)bin\$(MSBuildProjectName)</OutputPath>
+    <IntermediateOutputPath>$(MSBuildProjectDirectory)\obj</IntermediateOutputPath>
+    <OutputPath>$(MSBuildProjectDirectory)\bin</OutputPath>
     
     <!-- Repository root directory -->
     <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
