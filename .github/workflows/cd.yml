@@ -84,7 +84,7 @@ jobs:
           pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch $PREVIOUS_COMMIT -HeadBranch $CI_COMMIT_SHA
           
           # For automatic deployments, set a default app-name (will be overridden by PowerShell script if it outputs one)
-          echo "app-name=EchoAPI" >> $GITHUB_OUTPUT
+          echo "app-name=echo-api" >> $GITHUB_OUTPUT
         else
           # For manual dispatch, use the specified app or all apps
           if [ -n "${{ github.event.inputs.app-name }}" ]; then
@@ -97,8 +97,8 @@ jobs:
             # Deploy all apps
             echo "Manual deployment for all apps"
             echo "has-changes=true" >> $GITHUB_OUTPUT
-            echo "affected-projects=EchoAPI" >> $GITHUB_OUTPUT
-            echo "app-name=EchoAPI" >> $GITHUB_OUTPUT
+            echo "affected-projects=echo-api" >> $GITHUB_OUTPUT
+            echo "app-name=echo-api" >> $GITHUB_OUTPUT
           fi
         fi
 
@@ -141,11 +141,7 @@ jobs:
     if: needs.consolidate-deployment.outputs.has-changes == 'true' && github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     strategy:
-      matrix:
-        project:
-          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
-            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
-            type: webapi
+      matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
       fail-fast: false
     
     steps:
@@ -167,11 +163,7 @@ jobs:
     if: needs.consolidate-deployment.outputs.has-changes == 'true' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
-      matrix:
-        project:
-          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
-            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
-            type: webapi
+      matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
       fail-fast: false
     
     steps:
@@ -207,7 +199,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.project.name }}-deployment-artifacts
-        path: ./publish/${{ matrix.project.name }}
+        path: ${{ matrix.project.path }}/publish
 
   # Prepare artifacts for deployment (consolidates both automatic and manual builds)
   prepare-artifacts:
@@ -215,11 +207,7 @@ jobs:
     if: needs.consolidate-deployment.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
-      matrix:
-        project:
-          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
-            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
-            type: webapi
+      matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
       fail-fast: false
     
     steps:
@@ -261,11 +249,7 @@ jobs:
        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
     strategy:
-      matrix:
-        project:
-          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
-            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
-            type: webapi
+      matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
       fail-fast: false
     
     steps:
@@ -323,11 +307,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ needs.load-config.outputs.production-environment }}
     strategy:
-      matrix:
-        project:
-          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
-            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
-            type: webapi
+      matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
       fail-fast: false
     
     steps:
