@@ -90,10 +90,18 @@ function Build-ProjectMatrix {
             continue
         }
         
+        $projectType = Get-ProjectType -ProjectName $project
+        
+        # Skip non-deployable project types (like classlib)
+        if ($projectType -eq "classlib" -or $projectType -eq "unknown") {
+            Write-Host "Skipping non-deployable project: $project (type: $projectType)"
+            continue
+        }
+        
         $projectInfo = @{
             name = $project
             path = $projectPath
-            type = Get-ProjectType -ProjectName $project
+            type = $projectType
         }
         
         $projectArray += $projectInfo
@@ -178,7 +186,23 @@ Write-Host "Affected projects: $($affectedProjects -join ', ')"
 
 # Build matrix for GitHub Actions
 $matrix = Build-ProjectMatrix -Projects $affectedProjects
+
+Write-Host "Matrix object before JSON conversion:"
+Write-Host ($matrix | ConvertTo-Json -Depth 10)
+
 $matrixJson = $matrix | ConvertTo-Json -Depth 10 -Compress
+
+Write-Host "Matrix JSON generated: $matrixJson"
+
+# Validate JSON
+try {
+    $testParse = $matrixJson | ConvertFrom-Json
+    Write-Host "JSON validation: PASSED"
+} catch {
+    Write-Host "JSON validation: FAILED - $_"
+    # Fallback to empty matrix
+    $matrixJson = '{"include":[]}'
+}
 
 # Check if the matrix has any projects after filtering
 if ($matrix.include.Count -eq 0) {
@@ -193,4 +217,4 @@ Write-GitHubOutput -Name "has-changes" -Value "true"
 Write-GitHubOutput -Name "matrix" -Value $matrixJson
 Write-GitHubOutput -Name "affected-projects" -Value ($affectedProjects -join ',')
 
-Write-Host "Matrix generated: $matrixJson" 
+Write-Host "Final matrix output: $matrixJson" 

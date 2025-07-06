@@ -113,12 +113,28 @@ jobs:
       affected-projects: ${{ steps.consolidate.outputs.affected-projects }}
     
     steps:
+    - name: Debug matrix input
+      run: |
+        echo "=== DEBUG: Matrix Input ==="
+        echo "Raw matrix from determine-changes:"
+        echo "${{ needs.determine-changes.outputs.matrix }}"
+        echo "Matrix length: ${#needs.determine-changes.outputs.matrix}"
+        echo "================================"
+
     - name: Consolidate outputs
       id: consolidate
       run: |
         echo "has-changes=${{ needs.determine-changes.outputs.has-changes }}" >> $GITHUB_OUTPUT
         echo "matrix=${{ needs.determine-changes.outputs.matrix }}" >> $GITHUB_OUTPUT
         echo "affected-projects=${{ needs.determine-changes.outputs.affected-projects }}" >> $GITHUB_OUTPUT
+
+    - name: Debug matrix output
+      run: |
+        echo "=== DEBUG: Matrix Output ==="
+        echo "Final matrix output:"
+        echo "${{ steps.consolidate.outputs.matrix }}"
+        echo "Matrix length: ${#steps.consolidate.outputs.matrix}"
+        echo "================================"
 
   # Download CI artifacts for deployment (automatic deployments)
   download-artifacts:
