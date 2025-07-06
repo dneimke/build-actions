@@ -163,7 +163,7 @@ jobs:
 
   # Build for manual deployments (when no CI artifacts available)
   build-for-manual-deployment:
-    needs: [consolidate-deployment, determine-changes]
+    needs: [load-config, consolidate-deployment, determine-changes]
     if: needs.consolidate-deployment.outputs.has-changes == 'true' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
@@ -254,7 +254,7 @@ jobs:
 
   # Deploy to staging environment
   deploy-staging:
-    needs: [consolidate-deployment, prepare-artifacts]
+    needs: [load-config, consolidate-deployment, prepare-artifacts]
     if: |
       needs.consolidate-deployment.outputs.has-changes == 'true' && 
       (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging' || 
@@ -315,7 +315,7 @@ jobs:
 
   # Deploy to production (manual approval required)
   deploy-production:
-    needs: [consolidate-deployment, prepare-artifacts, deploy-staging]
+    needs: [load-config, consolidate-deployment, prepare-artifacts, deploy-staging]
     if: |
       needs.consolidate-deployment.outputs.has-changes == 'true' && 
       github.event_name == 'workflow_dispatch' && 
