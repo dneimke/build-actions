@@ -128,9 +128,6 @@ jobs:
     strategy:
       matrix:
         project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
-        # Add a filter to only include webapi projects
-        include: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
-        exclude: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) | filter(project => project.type != 'webapi') }}
       fail-fast: false
     
     steps:
