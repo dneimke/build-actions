@@ -201,9 +201,49 @@ jobs:
         name: ${{ matrix.project.name }}-deployment-artifacts
         path: ./publish/${{ matrix.project.name }}
 
+  # Prepare artifacts for deployment (consolidates both automatic and manual builds)
+  prepare-artifacts:
+    needs: [consolidate-deployment, download-artifacts, build-for-manual-deployment]
+    if: needs.consolidate-deployment.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+      fail-fast: false
+    
+    steps:
+    - name: Check if artifacts exist from download
+      id: check-download
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_run" ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Download artifacts from download job (if available)
+      if: steps.check-download.outputs.exists == 'true'
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ matrix.project.name }}-deployment-artifacts
+        path: ./artifacts/${{ matrix.project.name }}
+
+    - name: Download artifacts from build job (if available)
+      if: steps.check-download.outputs.exists == 'false'
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ matrix.project.name }}-deployment-artifacts
+        path: ./artifacts/${{ matrix.project.name }}
+
+    - name: Upload consolidated artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.project.name }}-final-artifacts
+        path: ./artifacts/${{ matrix.project.name }}
+
   # Deploy to staging environment
   deploy-staging:
-    needs: [consolidate-deployment, download-artifacts, build-for-manual-deployment]
+    needs: [consolidate-deployment, prepare-artifacts]
     if: |
       needs.consolidate-deployment.outputs.has-changes == 'true' && 
       (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging' || 
@@ -219,10 +259,10 @@ jobs:
       id: config
       uses: ./.github/actions/load-config
 
-    - name: Download deployment artifacts
+    - name: Download final artifacts
       uses: actions/download-artifact@v4
       with:
-        name: ${{ matrix.project.name }}-deployment-artifacts
+        name: ${{ matrix.project.name }}-final-artifacts
         path: ./artifacts
 
     - name: Deploy to Azure App Service
@@ -261,7 +301,7 @@ jobs:
 
   # Deploy to production (manual approval required)
   deploy-production:
-    needs: [consolidate-deployment, download-artifacts, build-for-manual-deployment, deploy-staging]
+    needs: [consolidate-deployment, prepare-artifacts, deploy-staging]
     if: |
       needs.consolidate-deployment.outputs.has-changes == 'true' && 
       github.event_name == 'workflow_dispatch' && 
@@ -278,10 +318,10 @@ jobs:
       id: config
       uses: ./.github/actions/load-config
 
-    - name: Download deployment artifacts
+    - name: Download final artifacts
       uses: actions/download-artifact@v4
       with:
-        name: ${{ matrix.project.name }}-deployment-artifacts
+        name: ${{ matrix.project.name }}-final-artifacts
         path: ./artifacts
 
     - name: Deploy to Azure App Service
@@ -320,7 +360,7 @@ jobs:
 
   # Deployment summary
   deployment-summary:
-    needs: [consolidate-deployment, download-artifacts, build-for-manual-deployment, deploy-staging, deploy-production]
+    needs: [consolidate-deployment, prepare-artifacts, deploy-staging, deploy-production]
     runs-on: ubuntu-latest
     if: always()
     
@@ -341,18 +381,10 @@ jobs:
           echo "❌ **Consolidate Deployment**: Failed" >> $GITHUB_STEP_SUMMARY
         fi
         
-        if [ "${{ github.event_name }}" = "workflow_run" ]; then
-          if [ "${{ needs.download-artifacts.result }}" = "success" ]; then
-            echo "✅ **Download Artifacts**: Passed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Download Artifacts**: Failed" >> $GITHUB_STEP_SUMMARY
-          fi
+        if [ "${{ needs.prepare-artifacts.result }}" = "success" ]; then
+          echo "✅ **Prepare Artifacts**: Passed" >> $GITHUB_STEP_SUMMARY
         else
-          if [ "${{ needs.build-for-manual-deployment.result }}" = "success" ]; then
-            echo "✅ **Build for Manual Deployment**: Passed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Build for Manual Deployment**: Failed" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "❌ **Prepare Artifacts**: Failed" >> $GITHUB_STEP_SUMMARY
         fi
         
         if [ "${{ needs.deploy-staging.result }}" = "success" ]; then
@@ -376,18 +408,10 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "### Artifact Results" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            if [ "${{ needs.download-artifacts.result }}" = "success" ]; then
-              echo "✅ All artifacts downloaded successfully" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "❌ Some artifacts failed to download" >> $GITHUB_STEP_SUMMARY
-            fi
+          if [ "${{ needs.prepare-artifacts.result }}" = "success" ]; then
+            echo "✅ All artifacts prepared successfully" >> $GITHUB_STEP_SUMMARY
           else
-            if [ "${{ needs.build-for-manual-deployment.result }}" = "success" ]; then
-              echo "✅ All builds completed successfully" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "❌ Some builds failed" >> $GITHUB_STEP_SUMMARY
-            fi
+            echo "❌ Some artifacts failed to prepare" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           
