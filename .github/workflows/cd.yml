@@ -141,7 +141,11 @@ jobs:
     if: needs.consolidate-deployment.outputs.has-changes == 'true' && github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+      matrix:
+        project:
+          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
+            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
+            type: webapi
       fail-fast: false
     
     steps:
@@ -163,7 +167,11 @@ jobs:
     if: needs.consolidate-deployment.outputs.has-changes == 'true' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+      matrix:
+        project:
+          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
+            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
+            type: webapi
       fail-fast: false
     
     steps:
