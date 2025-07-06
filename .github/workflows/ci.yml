@@ -103,7 +103,6 @@ jobs:
         echo "Project path: '${{ matrix.project.path }}'"
         echo "Build configuration: '${{ needs.load-config.outputs.build-configuration }}'"
         echo "Is webapi: ${{ matrix.project.type == 'webapi' }}"
-        echo "Matrix keys: ${{ keys(matrix) }}"
         echo "================================"
 
     - name: Debug project structure
@@ -114,7 +113,7 @@ jobs:
         if [ -d "${{ matrix.project.path }}" ]; then
           echo "Project contents:"
           ls -la "${{ matrix.project.path }}"
-          echo "Project.json exists: $([ -f "${{ matrix.project.path }}/project.json" ] && echo "YES" || echo "NO")"
+          ec.s: $([ -f "${{ matrix.project.path }}/project.json" ] && echo "YES" || echo "NO")"
           if [ -f "${{ matrix.project.path }}/project.json" ]; then
             echo "Project.json contents:"
             cat "${{ matrix.project.path }}/project.json"
