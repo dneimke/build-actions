@@ -244,7 +244,7 @@ jobs:
 
   # Prepare artifacts for deployment (consolidates both automatic and manual builds)
   prepare-artifacts:
-    needs: [consolidate-deployment, download-artifacts, build-for-manual-deployment]
+    needs: [consolidate-deployment, build-for-manual-deployment]
     if: needs.consolidate-deployment.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
@@ -283,6 +283,7 @@ jobs:
       with:
         name: ${{ matrix.project.name }}-deployment-artifacts
         path: ./artifacts/${{ matrix.project.name }}
+      continue-on-error: true
 
     - name: Download artifacts from build job (if available)
       if: steps.check-download.outputs.exists == 'false'
