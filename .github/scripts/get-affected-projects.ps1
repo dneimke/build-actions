@@ -14,7 +14,7 @@ function Write-GitHubOutput {
     Write-Output "$Name=$Value" >> $env:GITHUB_OUTPUT
 }
 
-# Function to get affected projects using Nx
+# Function to get affected projects using Nx (including dependents)
 function Get-AffectedProjects {
     param(
         [string]$BaseBranch,
@@ -32,7 +32,7 @@ function Get-AffectedProjects {
         
         Write-Host "Nx version: $nxVersion"
         
-        # Get affected projects using Nx
+        # Get affected projects using Nx with --affected flag to include dependents
         Write-Host "Running: npx nx show projects --affected --base=$BaseBranch --head=$HeadBranch --json"
         $affectedOutput = npx nx show projects --affected --base=$BaseBranch --head=$HeadBranch --json 2>&1
         
@@ -58,25 +58,7 @@ function Get-AffectedProjects {
     }
 }
 
-# Function to get project dependencies
-function Get-ProjectDependencies {
-    param(
-        [string]$ProjectName
-    )
-    
-    try {
-        $depsOutput = npx nx graph --file=temp-graph.json --focus=$ProjectName 2>$null
-        if (Test-Path "temp-graph.json") {
-            $graph = Get-Content "temp-graph.json" | ConvertFrom-Json
-            Remove-Item "temp-graph.json" -Force
-            return $graph.dependencies.$ProjectName
-        }
-    }
-    catch {
-        Write-Host "Error getting dependencies for $ProjectName : $_"
-    }
-    return @()
-}
+
 
 # Function to build project matrix
 function Build-ProjectMatrix {
@@ -189,7 +171,7 @@ if ($affectedProjects.Count -eq 0) {
     exit 0
 }
 
-Write-Host "Affected projects: $($affectedProjects -join ', ')"
+Write-Host "Affected projects (including dependents): $($affectedProjects -join ', ')"
 
 # Build matrix for GitHub Actions
 $matrix = Build-ProjectMatrix -Projects $affectedProjects
