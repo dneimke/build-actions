@@ -86,7 +86,7 @@ jobs:
     - name: Manually restore shared project
       run: |
         echo "Manually restoring shared project..."
-        dotnet restore libs/shared/Shared.csproj
+        dotnet restore libs/shared/Shared.csproj 
         
         echo "✅ Manual restore completed"
 
