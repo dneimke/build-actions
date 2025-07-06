@@ -51,6 +51,7 @@ jobs:
       has-changes: ${{ steps.get-affected.outputs.has-changes }}
       matrix: ${{ steps.get-affected.outputs.matrix }}
       affected-projects: ${{ steps.get-affected.outputs.affected-projects }}
+      app-name: ${{ steps.get-affected.outputs.app-name }}
     
     steps:
     - name: Checkout code
@@ -81,6 +82,9 @@ jobs:
           
           # Run the PowerShell script to get affected projects
           pwsh .github/scripts/get-affected-projects.ps1 -BaseBranch $PREVIOUS_COMMIT -HeadBranch $CI_COMMIT_SHA
+          
+          # For automatic deployments, set a default app-name (will be overridden by PowerShell script if it outputs one)
+          echo "app-name=echo-api" >> $GITHUB_OUTPUT
         else
           # For manual dispatch, use the specified app or all apps
           if [ -n "${{ github.event.inputs.app-name }}" ]; then
@@ -88,19 +92,15 @@ jobs:
             echo "Manual deployment for ${{ github.event.inputs.app-name }}"
             echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "affected-projects=${{ github.event.inputs.app-name }}" >> $GITHUB_OUTPUT
-            
-            # Create matrix for specific app using jq for proper JSON creation
-            APP_NAME="${{ github.event.inputs.app-name }}"
-            matrix=$(jq -n --arg name "$APP_NAME" --arg path "apps/$APP_NAME" '{"include":[{"name":$name,"path":$path,"type":"webapi"}]}')
-            echo "matrix=$matrix" >> $GITHUB_OUTPUT
+            echo "app-name=${{ github.event.inputs.app-name }}" >> $GITHUB_OUTPUT
+            echo "matrix={\"project\":[{\"name\":\"${{ github.event.inputs.app-name }}\",\"path\":\"apps/${{ github.event.inputs.app-name }}\",\"type\":\"webapi\"}]}" >> $GITHUB_OUTPUT
           else
             # Deploy all apps
             echo "Manual deployment for all apps"
             echo "has-changes=true" >> $GITHUB_OUTPUT
-            echo "affected-projects=EchoAPI" >> $GITHUB_OUTPUT
-            
-            matrix='{"include":[{"name":"EchoAPI","path":"apps/EchoAPI","type":"webapi"}]}'
-            echo "matrix=$matrix" >> $GITHUB_OUTPUT
+            echo "affected-projects=echo-api" >> $GITHUB_OUTPUT
+            echo "app-name=echo-api" >> $GITHUB_OUTPUT
+            echo "matrix={\"project\":[{\"name\":\"echo-api\",\"path\":\"apps/EchoAPI\",\"type\":\"webapi\"}]}" >> $GITHUB_OUTPUT
           fi
         fi
 
@@ -112,6 +112,7 @@ jobs:
       has-changes: ${{ steps.consolidate.outputs.has-changes }}
       matrix: ${{ steps.consolidate.outputs.matrix }}
       affected-projects: ${{ steps.consolidate.outputs.affected-projects }}
+      app-name: ${{ steps.consolidate.outputs.app-name }}
     
     steps:
     - name: Debug matrix input
@@ -127,12 +128,44 @@ jobs:
         echo "has-changes=${{ needs.determine-changes.outputs.has-changes }}" >> $GITHUB_OUTPUT
         echo "matrix=${{ needs.determine-changes.outputs.matrix }}" >> $GITHUB_OUTPUT
         echo "affected-projects=${{ needs.determine-changes.outputs.affected-projects }}" >> $GITHUB_OUTPUT
+        echo "app-name=${{ needs.determine-changes.outputs.app-name }}" >> $GITHUB_OUTPUT
 
     - name: Debug matrix output
       run: |
         echo "=== DEBUG: Matrix Output ==="
         echo "Final matrix output:"
         echo "${{ steps.consolidate.outputs.matrix }}"
+        echo "================================"
+
+    - name: Debug all outputs
+      run: |
+        echo "=== DEBUG: All Outputs ==="
+        echo "has-changes: '${{ needs.determine-changes.outputs.has-changes }}'"
+        echo "matrix: '${{ needs.determine-changes.outputs.matrix }}'"
+        echo "affected-projects: '${{ needs.determine-changes.outputs.affected-projects }}'"
+        echo "app-name: '${{ needs.determine-changes.outputs.app-name }}'"
+        echo "================================"
+
+    - name: Test matrix JSON parsing
+      run: |
+        echo "=== TESTING MATRIX JSON ==="
+        MATRIX_JSON='${{ needs.determine-changes.outputs.matrix }}'
+        echo "Raw matrix JSON: '$MATRIX_JSON'"
+        
+        if [ -n "$MATRIX_JSON" ]; then
+          echo "Matrix JSON is not empty"
+          # Test if it's valid JSON
+          if echo "$MATRIX_JSON" | jq . > /dev/null 2>&1; then
+            echo "✅ Matrix JSON is valid"
+            echo "Parsed matrix:"
+            echo "$MATRIX_JSON" | jq .
+          else
+            echo "❌ Matrix JSON is invalid"
+            echo "Raw content: $MATRIX_JSON"
+          fi
+        else
+          echo "❌ Matrix JSON is empty"
+        fi
         echo "================================"
 
   # Download CI artifacts for deployment (automatic deployments)
@@ -142,7 +175,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+        project:
+          - name: ${{ needs.consolidate-deployment.outputs.app-name }}
+            path: apps/${{ needs.consolidate-deployment.outputs.app-name }}
+            type: webapi
       fail-fast: false
     
     steps:
@@ -160,12 +196,15 @@ jobs:
 
   # Build for manual deployments (when no CI artifacts available)
   build-for-manual-deployment:
-    needs: [consolidate-deployment, determine-changes]
+    needs: [load-config, consolidate-deployment, determine-changes]
     if: needs.consolidate-deployment.outputs.has-changes == 'true' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+        project:
+          - name: echo-api
+            path: apps/EchoAPI
+            type: webapi
       fail-fast: false
     
     steps:
@@ -175,44 +214,65 @@ jobs:
         fetch-depth: 0
         ref: ${{ github.ref }}
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ needs.load-config.outputs.dotnet-version }}
+    - name: Setup environment
+      uses: ./.github/actions/setup-environment
 
     - name: Restore dependencies
-      run: dotnet restore ${{ matrix.project.path }}
+      run: npx nx g @nx-dotnet/core:restore
 
     - name: Build project
       run: |
-        dotnet build ${{ matrix.project.path }} \
-          --configuration ${{ needs.load-config.outputs.build-configuration }} \
-          --no-restore
+        npx nx run-many --target=build \
+          --projects=${{ matrix.project.name }} \
+          --configuration=${{ needs.load-config.outputs.build-configuration }} \
+          --parallel=1 \
+          --verbose
 
     - name: Publish project
       run: |
-        dotnet publish ${{ matrix.project.path }} \
-          --configuration ${{ needs.load-config.outputs.build-configuration }} \
-          --output ./publish/${{ matrix.project.name }} \
-          --no-restore
+        npx nx run-many --target=publish \
+          --projects=${{ matrix.project.name }} \
+          --configuration=${{ needs.load-config.outputs.build-configuration }} \
+          --parallel=1 \
+          --verbose
 
     - name: Upload deployment artifacts
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.project.name }}-deployment-artifacts
-        path: ./publish/${{ matrix.project.name }}
+        path: ${{ matrix.project.path }}/publish
 
   # Prepare artifacts for deployment (consolidates both automatic and manual builds)
   prepare-artifacts:
-    needs: [consolidate-deployment, download-artifacts, build-for-manual-deployment]
+    needs: [consolidate-deployment, build-for-manual-deployment]
     if: needs.consolidate-deployment.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
+      # matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}  
       matrix:
-        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+        project:
+          - name: echo-api
+            path: apps/EchoAPI
+            type: webapi
       fail-fast: false
+      # Alternative hardcoded matrix for debugging:
+      # matrix:
+      #   project:
+      #     - name: echo-api
+      #       path: apps/EchoAPI
+      #       type: webapi
     
     steps:
+    - name: Debug prepare-artifacts start
+      run: |
+        echo "=== PREPARE-ARTIFACTS DEBUG ==="
+        echo "Job started successfully!"
+        echo "Matrix: ${{ toJson(matrix) }}"
+        echo "Event name: ${{ github.event_name }}"
+        echo "Consolidate deployment has-changes: ${{ needs.consolidate-deployment.outputs.has-changes }}"
+        echo "Consolidate deployment matrix: ${{ needs.consolidate-deployment.outputs.matrix }}"
+        echo "================================"
+
     - name: Check if artifacts exist from download
       id: check-download
       run: |
@@ -228,6 +288,7 @@ jobs:
       with:
         name: ${{ matrix.project.name }}-deployment-artifacts
         path: ./artifacts/${{ matrix.project.name }}
+      continue-on-error: true
 
     - name: Download artifacts from build job (if available)
       if: steps.check-download.outputs.exists == 'false'
@@ -244,18 +305,27 @@ jobs:
 
   # Deploy to staging environment
   deploy-staging:
-    needs: [consolidate-deployment, prepare-artifacts]
+    needs: [load-config, consolidate-deployment, prepare-artifacts]
     if: |
       needs.consolidate-deployment.outputs.has-changes == 'true' && 
       (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging' || 
        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
     strategy:
+      # matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}  
       matrix:
-        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+        project:
+          - name: echo-api
+            path: apps/EchoAPI
+            type: webapi
       fail-fast: false
     
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
     - name: Load workflow configuration
       id: config
       uses: ./.github/actions/load-config
@@ -266,12 +336,12 @@ jobs:
         name: ${{ matrix.project.name }}-final-artifacts
         path: ./artifacts
 
-    - name: Deploy to Azure App Service
-      uses: azure/webapps-deploy@v3
-      with:
-        app-name: ${{ matrix.project.name }}
-        package: ./artifacts
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+    # - name: Deploy to Azure App Service
+    #   uses: azure/webapps-deploy@v3
+    #   with:
+    #     app-name: ${{ matrix.project.name }}
+    #     package: ./artifacts
+    #     publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
 
     - name: Health check
       run: |
@@ -302,7 +372,7 @@ jobs:
 
   # Deploy to production (manual approval required)
   deploy-production:
-    needs: [consolidate-deployment, prepare-artifacts, deploy-staging]
+    needs: [load-config, consolidate-deployment, prepare-artifacts, deploy-staging]
     if: |
       needs.consolidate-deployment.outputs.has-changes == 'true' && 
       github.event_name == 'workflow_dispatch' && 
@@ -310,11 +380,15 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ needs.load-config.outputs.production-environment }}
     strategy:
-      matrix:
-        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
       fail-fast: false
     
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
     - name: Load workflow configuration
       id: config
       uses: ./.github/actions/load-config
@@ -366,6 +440,17 @@ jobs:
     if: always()
     
     steps:
+    - name: Debug job dependencies
+      run: |
+        echo "=== JOB DEPENDENCY DEBUG ==="
+        echo "consolidate-deployment result: ${{ needs.consolidate-deployment.result }}"
+        echo "download-artifacts result: ${{ needs.download-artifacts.result }}"
+        echo "build-for-manual-deployment result: ${{ needs.build-for-manual-deployment.result }}"
+        echo "prepare-artifacts result: ${{ needs.prepare-artifacts.result }}"
+        echo "deploy-staging result: ${{ needs.deploy-staging.result }}"
+        echo "deploy-production result: ${{ needs.deploy-production.result }}"
+        echo "================================"
+
     - name: Generate summary
       run: |
         echo "# Deployment Summary" >> $GITHUB_STEP_SUMMARY
