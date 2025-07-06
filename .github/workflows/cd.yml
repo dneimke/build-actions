@@ -88,19 +88,13 @@ jobs:
             echo "Manual deployment for ${{ github.event.inputs.app-name }}"
             echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "affected-projects=${{ github.event.inputs.app-name }}" >> $GITHUB_OUTPUT
-            
-            # Create matrix for specific app - use a more robust approach
-            APP_NAME="${{ github.event.inputs.app-name }}"
-            # Create JSON using a different method that preserves quotes
-            echo "matrix={\"include\":[{\"name\":\"$APP_NAME\",\"path\":\"apps/$APP_NAME\",\"type\":\"webapi\"}]}" >> $GITHUB_OUTPUT
-            echo "DEBUG: App name is: $APP_NAME" >&2
+            echo "app-name=${{ github.event.inputs.app-name }}" >> $GITHUB_OUTPUT
           else
             # Deploy all apps
             echo "Manual deployment for all apps"
             echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "affected-projects=EchoAPI" >> $GITHUB_OUTPUT
-            
-            echo "matrix={\"include\":[{\"name\":\"EchoAPI\",\"path\":\"apps/EchoAPI\",\"type\":\"webapi\"}]}" >> $GITHUB_OUTPUT
+            echo "app-name=EchoAPI" >> $GITHUB_OUTPUT
           fi
         fi
 
@@ -165,7 +159,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ${{ needs.consolidate-deployment.outputs.matrix }}
+        project: ${{ fromJson(format('{{"include":[{{"name":"{0}","path":"apps/{0}","type":"webapi"}}]}}', needs.consolidate-deployment.outputs.app-name)) }}
       fail-fast: false
     
     steps:
@@ -209,7 +203,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+        project: ${{ fromJson(format('{{"include":[{{"name":"{0}","path":"apps/{0}","type":"webapi"}}]}}', needs.consolidate-deployment.outputs.app-name)) }}
       fail-fast: false
     
     steps:
@@ -252,7 +246,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+        project: ${{ fromJson(format('{{"include":[{{"name":"{0}","path":"apps/{0}","type":"webapi"}}]}}', needs.consolidate-deployment.outputs.app-name)) }}
       fail-fast: false
     
     steps:
@@ -311,7 +305,7 @@ jobs:
     environment: ${{ needs.load-config.outputs.production-environment }}
     strategy:
       matrix:
-        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+        project: ${{ fromJson(format('{{"include":[{{"name":"{0}","path":"apps/{0}","type":"webapi"}}]}}', needs.consolidate-deployment.outputs.app-name)) }}
       fail-fast: false
     
     steps:
