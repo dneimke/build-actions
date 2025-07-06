@@ -181,10 +181,8 @@ jobs:
         fetch-depth: 0
         ref: ${{ github.ref }}
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ needs.load-config.outputs.dotnet-version }}
+    - name: Setup environment
+      uses: ./.github/actions/setup-environment
 
     - name: Restore dependencies
       run: dotnet restore ${{ matrix.project.path }}
