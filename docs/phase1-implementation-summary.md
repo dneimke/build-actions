@@ -200,7 +200,7 @@ DOCKER_PASSWORD=<docker-password>
 npx nx affected:graph
 
 # Test build locally
-npx nx build EchoAPI
+npx nx build echo-api
 
 # Test affected projects
 npx nx affected:build

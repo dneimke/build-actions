@@ -36,8 +36,8 @@ This document outlines the GitHub Actions build and deployment strategy for our 
 
 ### Current Project Structure
 
-- **Apps**: `apps/EchoAPI/` - .NET 8 Web API
-- **Libraries**: `libs/Shared/` - Shared .NET class library
+- **Apps**: `apps/echo-api/` - .NET 8 Web API
+- **Libraries**: `libs/shared/` - Shared .NET class library
 - **Build System**: Nx with `@nx-dotnet/core` plugin
 - **Solution**: `MonoRepoSolution.sln` - Visual Studio solution file
 
@@ -132,7 +132,7 @@ deployment:
   "apps": {
     "echo-api": {
       "type": "webapi",
-      "path": "apps/EchoAPI",
+      "path": "apps/echo-api",
       "environments": ["dev", "staging", "prod"],
       "deployment": {
         "type": "azure-app-service",
@@ -149,7 +149,7 @@ deployment:
   "libs": {
     "shared": {
       "type": "classlib",
-      "path": "libs/Shared",
+      "path": "libs/shared",
       "publish": false,
       "build": {
         "framework": "net8.0",

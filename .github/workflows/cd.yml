@@ -100,7 +100,7 @@ jobs:
             echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "affected-projects=echo-api" >> $GITHUB_OUTPUT
             echo "app-name=echo-api" >> $GITHUB_OUTPUT
-            echo "matrix={\"project\":[{\"name\":\"echo-api\",\"path\":\"apps/EchoAPI\",\"type\":\"webapi\"}]}" >> $GITHUB_OUTPUT
+            echo "matrix={\"project\":[{\"name\":\"echo-api\",\"path\":\"apps/echo-api\",\"type\":\"webapi\"}]}" >> $GITHUB_OUTPUT
           fi
         fi
 
@@ -203,7 +203,7 @@ jobs:
       matrix:
         project:
           - name: echo-api
-            path: apps/EchoAPI
+            path: apps/echo-api
             type: webapi
       fail-fast: false
     
@@ -252,7 +252,7 @@ jobs:
       matrix:
         project:
           - name: echo-api
-            path: apps/EchoAPI
+            path: apps/echo-api
             type: webapi
       fail-fast: false
       # Alternative hardcoded matrix for debugging:
@@ -316,7 +316,7 @@ jobs:
       matrix:
         project:
           - name: echo-api
-            path: apps/EchoAPI
+            path: apps/echo-api
             type: webapi
       fail-fast: false
     

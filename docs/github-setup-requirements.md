@@ -192,11 +192,11 @@ Create `.github/CODEOWNERS` file:
 # Global code owners
 * @your-team-name
 
-# API team owns EchoAPI
-apps/EchoAPI/ @api-team
+# API team owns echo-api
+apps/echo-api/ @api-team
 
 # Shared libraries team
-libs/Shared/ @shared-libs-team
+libs/shared/ @shared-libs-team
 
 # Infrastructure and deployment
 .github/ @devops-team
