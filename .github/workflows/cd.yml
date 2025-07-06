@@ -185,20 +185,23 @@ jobs:
       uses: ./.github/actions/setup-environment
 
     - name: Restore dependencies
-      run: dotnet restore ${{ matrix.project.path }}
+      run: npx nx g @nx-dotnet/core:restore
 
     - name: Build project
       run: |
-        dotnet build ${{ matrix.project.path }} \
-          --configuration ${{ needs.load-config.outputs.build-configuration }} \
-          --no-restore
+        npx nx run-many --target=build \
+          --projects=${{ matrix.project.name }} \
+          --configuration=${{ needs.load-config.outputs.build-configuration }} \
+          --parallel=1 \
+          --verbose
 
     - name: Publish project
       run: |
-        dotnet publish ${{ matrix.project.path }} \
-          --configuration ${{ needs.load-config.outputs.build-configuration }} \
-          --output ./publish/${{ matrix.project.name }} \
-          --no-restore
+        npx nx run-many --target=publish \
+          --projects=${{ matrix.project.name }} \
+          --configuration=${{ needs.load-config.outputs.build-configuration }} \
+          --parallel=1 \
+          --verbose
 
     - name: Upload deployment artifacts
       uses: actions/upload-artifact@v4
