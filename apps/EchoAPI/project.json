@@ -5,43 +5,55 @@
   "sourceRoot": "apps/EchoAPI",
   "targets": {
     "build": {
-      "executor": "nx:run-commands",
-      "outputs": ["{workspaceRoot}/dist/apps/EchoAPI"],
+      "executor": "@nx-dotnet/core:build",
+      "outputs": ["{projectRoot}/bin", "{projectRoot}/obj"],
+      "dependsOn": ["^build"],
       "options": {
-        "command": "dotnet build apps/EchoAPI/EchoAPI.csproj --configuration Debug"
+        "configuration": "Debug"
       },
       "configurations": {
         "production": {
           "options": {
-            "command": "dotnet build apps/EchoAPI/EchoAPI.csproj --configuration Release"
+            "configuration": "Release"
           }
         }
       }
     },
     "serve": {
-      "executor": "nx:run-commands",
+      "executor": "@nx-dotnet/core:serve",
       "options": {
-        "command": "dotnet watch --project apps/EchoAPI/EchoAPI.csproj run --configuration Debug"
+        "configuration": "Debug"
       },
       "configurations": {
         "production": {
           "options": {
-            "command": "dotnet watch --project apps/EchoAPI/EchoAPI.csproj run --configuration Release"
+            "configuration": "Release"
           }
         }
       }
     },
     "test": {
-      "executor": "nx:run-commands",
+      "executor": "@nx-dotnet/core:test",
+      "outputs": ["{projectRoot}/coverage"],
+      "dependsOn": ["^build"],
       "options": {
-        "command": "dotnet test apps/EchoAPI/EchoAPI.csproj --configuration Debug"
+        "configuration": "Debug"
       },
       "configurations": {
         "production": {
           "options": {
-            "command": "dotnet test apps/EchoAPI/EchoAPI.csproj --configuration Release"
+            "configuration": "Release"
           }
         }
+      }
+    },
+    "publish": {
+      "executor": "@nx-dotnet/core:publish",
+      "outputs": ["{projectRoot}/publish"],
+      "dependsOn": ["^build"],
+      "options": {
+        "configuration": "Release",
+        "output": "{projectRoot}/publish"
       }
     }
   },

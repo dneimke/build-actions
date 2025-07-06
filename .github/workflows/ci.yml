@@ -88,22 +88,20 @@ jobs:
     - name: Setup environment
       uses: ./.github/actions/setup-environment
 
-    - name: Restore dependencies
-      run: dotnet restore ${{ matrix.project.path }}
-
-    - name: Build project
+    - name: Build affected projects
       run: |
-        dotnet build ${{ matrix.project.path }} \
-          --configuration ${{ needs.load-config.outputs.build-configuration }} \
-          --no-restore
+        npx nx run-many --target=build \
+          --projects=${{ matrix.project.name }} \
+          --configuration=${{ needs.load-config.outputs.build-configuration }} \
+          --parallel=1
 
     - name: Publish project (if webapi)
       if: matrix.project.type == 'webapi'
       run: |
-        dotnet publish ${{ matrix.project.path }} \
-          --configuration ${{ needs.load-config.outputs.build-configuration }} \
-          --output ./publish/${{ matrix.project.name }} \
-          --no-restore
+        npx nx run-many --target=publish \
+          --projects=${{ matrix.project.name }} \
+          --configuration=${{ needs.load-config.outputs.build-configuration }} \
+          --parallel=1
 
     - name: Upload build artifacts
       if: matrix.project.type == 'webapi'
@@ -129,16 +127,21 @@ jobs:
     - name: Setup environment
       uses: ./.github/actions/setup-environment
 
-    - name: Restore dependencies
-      run: dotnet restore ${{ matrix.project.path }}
-
-    - name: Run tests
+    - name: Run tests with coverage
       run: |
-        dotnet test ${{ matrix.project.path }} \
-          --configuration ${{ needs.load-config.outputs.build-configuration }} \
-          --no-restore \
+        npx nx run-many --target=test \
+          --projects=${{ matrix.project.name }} \
+          --configuration=${{ needs.load-config.outputs.build-configuration }} \
+          --parallel=1 \
           --collect:"XPlat Code Coverage" \
           --results-directory ./coverage
+
+    - name: Generate coverage report
+      if: always()
+      run: |
+        npx nx run-many --target=coverage \
+          --projects=${{ matrix.project.name }} \
+          --configuration=${{ needs.load-config.outputs.build-configuration }}
 
     - name: Upload coverage reports
       uses: codecov/codecov-action@v3
