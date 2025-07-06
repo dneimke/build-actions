@@ -68,6 +68,9 @@ jobs:
     - name: Setup environment
       uses: ./.github/actions/setup-environment
 
+    - name: Restore dependencies
+      run: npx nx g @nx-dotnet/core:restore
+
     - name: Check for vulnerable packages
       run: |
         echo "Checking for vulnerable NuGet packages..."
