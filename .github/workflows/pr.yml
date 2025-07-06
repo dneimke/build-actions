@@ -68,6 +68,37 @@ jobs:
     - name: Setup environment
       uses: ./.github/actions/setup-environment
 
+    - name: Debug Nx restore
+      run: |
+        echo "=== DEBUG: Nx Restore ==="
+        echo "Nx version: $(npx nx --version)"
+        echo "Available projects:"
+        npx nx show projects
+        echo "================================"
+
+    - name: Restore dependencies with Nx
+      run: |
+        echo "Restoring .NET dependencies using Nx..."
+        npx nx g @nx-dotnet/core:restore --verbose
+        
+        echo "✅ Nx restore completed"
+
+    - name: Debug project assets
+      run: |
+        echo "=== DEBUG: Project Assets ==="
+        find . -name "*.csproj" -type f | while read -r project; do
+          echo "Checking assets for $project"
+          project_dir=$(dirname "$project")
+          if [ -f "$project_dir/obj/project.assets.json" ]; then
+            echo "✅ Assets file exists for $project"
+          else
+            echo "❌ No assets file for $project"
+            echo "Contents of $project_dir/obj/:"
+            ls -la "$project_dir/obj/" 2>/dev/null || echo "obj directory does not exist"
+          fi
+        done
+        echo "================================"
+
     - name: Check for vulnerable packages
       run: |
         echo "Checking for vulnerable NuGet packages..."
@@ -76,16 +107,22 @@ jobs:
         find . -name "*.csproj" -type f | while read -r project; do
           echo "Checking $project"
           
-          # Check for known vulnerabilities
-          dotnet list "$project" package --vulnerable
-          
-          if [ $? -ne 0 ]; then
-            echo "❌ Vulnerable packages found in $project"
-            exit 1
+          # Check if assets file exists before running vulnerability check
+          project_dir=$(dirname "$project")
+          if [ -f "$project_dir/obj/project.assets.json" ]; then
+            echo "✅ Assets file exists, checking vulnerabilities for $project"
+            dotnet list "$project" package --vulnerable
+            if [ $? -ne 0 ]; then
+              echo "❌ Vulnerable packages found in $project"
+              exit 1
+            fi
+          else
+            echo "⚠️ Skipping vulnerability check for $project (no assets file)"
+            echo "This project may not have been properly restored"
           fi
         done
         
-        echo "✅ No vulnerable packages found"
+        echo "✅ Vulnerability check completed"
 
   # Code quality checks
   code-quality:

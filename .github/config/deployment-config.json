@@ -2,7 +2,7 @@
   "apps": {
     "echo-api": {
       "type": "webapi",
-      "path": "apps/EchoAPI",
+      "path": "apps/echo-api",
       "environments": ["dev", "staging", "prod"],
       "deployment": {
         "type": "azure-app-service",
@@ -19,7 +19,7 @@
   "libs": {
     "shared": {
       "type": "classlib",
-      "path": "libs/Shared",
+      "path": "libs/shared",
       "publish": false,
       "build": {
         "framework": "net8.0",

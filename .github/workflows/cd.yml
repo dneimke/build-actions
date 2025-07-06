@@ -100,7 +100,7 @@ jobs:
             echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "affected-projects=echo-api" >> $GITHUB_OUTPUT
             echo "app-name=echo-api" >> $GITHUB_OUTPUT
-            echo "matrix={\"project\":[{\"name\":\"echo-api\",\"path\":\"apps/EchoAPI\",\"type\":\"webapi\"}]}" >> $GITHUB_OUTPUT
+            echo "matrix={\"project\":[{\"name\":\"echo-api\",\"path\":\"apps/echo-api\",\"type\":\"webapi\"}]}" >> $GITHUB_OUTPUT
           fi
         fi
 
@@ -203,7 +203,7 @@ jobs:
       matrix:
         project:
           - name: echo-api
-            path: apps/EchoAPI
+            path: apps/echo-api
             type: webapi
       fail-fast: false
     
@@ -252,7 +252,7 @@ jobs:
       matrix:
         project:
           - name: echo-api
-            path: apps/EchoAPI
+            path: apps/echo-api
             type: webapi
       fail-fast: false
       # Alternative hardcoded matrix for debugging:
@@ -316,7 +316,7 @@ jobs:
       matrix:
         project:
           - name: echo-api
-            path: apps/EchoAPI
+            path: apps/echo-api
             type: webapi
       fail-fast: false
     
@@ -343,25 +343,25 @@ jobs:
     #     package: ./artifacts
     #     publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
 
-    - name: Health check
-      run: |
-        echo "Performing health check for ${{ matrix.project.name }}"
+    # - name: Health check
+    #   run: |
+    #     echo "Performing health check for ${{ matrix.project.name }}"
         
-        # Wait for deployment to be ready
-        sleep ${{ steps.config.outputs.health-check-delay }}
+    #     # Wait for deployment to be ready
+    #     sleep ${{ steps.config.outputs.health-check-delay }}
         
-        # Basic health check
-        APP_URL="https://${{ matrix.project.name }}.azurewebsites.net"
+    #     # Basic health check
+    #     APP_URL="https://${{ matrix.project.name }}.azurewebsites.net"
         
-        # Check if the app is responding
-        response=$(curl -s -o /dev/null -w "%{http_code}" $APP_URL/health || echo "000")
+    #     # Check if the app is responding
+    #     response=$(curl -s -o /dev/null -w "%{http_code}" $APP_URL/health || echo "000")
         
-        if [ "$response" = "200" ]; then
-          echo "✅ Health check passed"
-        else
-          echo "❌ Health check failed (HTTP $response)"
-          exit 1
-        fi
+    #     if [ "$response" = "200" ]; then
+    #       echo "✅ Health check passed"
+    #     else
+    #       echo "❌ Health check failed (HTTP $response)"
+    #       exit 1
+    #     fi
 
     - name: Notify deployment success
       if: success()

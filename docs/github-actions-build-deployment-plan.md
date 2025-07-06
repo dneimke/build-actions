@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the comprehensive GitHub Actions build and deployment strategy for our .NET-based monorepo using Nx for build orchestration. The design prioritizes efficiency, reusability, and scalability to support dozens of applications and libraries.
+This document outlines the GitHub Actions build and deployment strategy for our .NET-based monorepo using Nx for build orchestration. The design prioritizes efficiency, reusability, and scalability to support dozens of applications and libraries.
 
 ## Table of Contents
 
@@ -24,22 +24,20 @@ This document outlines the comprehensive GitHub Actions build and deployment str
 │   ├── ci.yml                    # Main CI pipeline
 │   ├── cd.yml                    # Main CD pipeline  
 │   ├── pr.yml                    # Pull request validation
-│   └── templates/
-│       ├── build-dotnet.yml      # Reusable .NET build template
-│       ├── test-dotnet.yml       # Reusable .NET test template
-│       ├── deploy-app.yml        # Reusable app deployment template
-│       └── cache-dotnet.yml      # Reusable .NET caching template
+├── actions/
+│   ├── load-config/              # Reusable config loading action
+│   └── setup-environment/        # Reusable environment setup
 ├── scripts/
-│   ├── get-affected-projects.ps1 # PowerShell script for Nx affected
-│   └── build-matrix.ps1          # Generate build matrix
+│   └── get-affected-projects.ps1 # PowerShell script for Nx affected
 └── config/
+    ├── workflow-config.yml       # Centralized workflow configuration
     └── deployment-config.json    # Centralized deployment configuration
 ```
 
 ### Current Project Structure
 
-- **Apps**: `apps/EchoAPI/` - .NET 8 Web API
-- **Libraries**: `libs/Shared/` - Shared .NET class library
+- **Apps**: `apps/echo-api/` - .NET 8 Web API
+- **Libraries**: `libs/shared/` - Shared .NET class library
 - **Build System**: Nx with `@nx-dotnet/core` plugin
 - **Solution**: `MonoRepoSolution.sln` - Visual Studio solution file
 
@@ -51,11 +49,11 @@ This document outlines the comprehensive GitHub Actions build and deployment str
 - **Incremental Builds**: Only build/test projects that have changed or depend on changed projects
 - **Dependency Graph**: Use Nx's dependency graph to determine build order
 
-### Reusable Templates
+### Reusable Components
 
 - **Composite Actions**: Create reusable composite actions for common tasks
-- **Workflow Templates**: Use GitHub's reusable workflow feature
-- **Configuration-Driven**: Centralize configuration in JSON files
+- **Configuration-Driven**: Centralize configuration in YAML and JSON files
+- **Modular Design**: Separate concerns into focused, reusable components
 
 ### Per-Application Workflows
 
@@ -112,23 +110,51 @@ This document outlines the comprehensive GitHub Actions build and deployment str
 
 ### Centralized Configuration
 
+**`.github/config/workflow-config.yml`**:
+```yaml
+dotnet:
+  version: '8.0.x'
+  build-configuration: 'Release'
+node:
+  version: '18'
+artifacts:
+  retention-days: 7
+deployment:
+  health-check-delay: 30
+  environments:
+    staging: 'staging'
+    production: 'production'
+```
+
+**`.github/config/deployment-config.json`**:
 ```json
 {
   "apps": {
-    "EchoAPI": {
+    "echo-api": {
       "type": "webapi",
+      "path": "apps/echo-api",
       "environments": ["dev", "staging", "prod"],
       "deployment": {
         "type": "azure-app-service",
         "resourceGroup": "my-rg",
         "appServiceName": "echo-api"
+      },
+      "build": {
+        "framework": "net8.0",
+        "publish": true,
+        "test": true
       }
     }
   },
   "libs": {
-    "Shared": {
+    "shared": {
       "type": "classlib",
-      "publish": false
+      "path": "libs/shared",
+      "publish": false,
+      "build": {
+        "framework": "net8.0",
+        "test": false
+      }
     }
   }
 }
@@ -142,27 +168,27 @@ This document outlines the comprehensive GitHub Actions build and deployment str
 
 ## Implementation Phases
 
-### Phase 1: Foundation
+### Phase 1: Foundation ✅
 
 1. **Set up basic CI/CD workflows**
-   - Create main CI workflow with Nx affected detection
-   - Implement basic build and test steps
-   - Set up pull request validation
+   - ✅ Create main CI workflow with Nx affected detection
+   - ✅ Implement basic build and test steps
+   - ✅ Set up pull request validation
 
 2. **Implement Nx affected detection**
-   - Create PowerShell script to get affected projects
-   - Integrate with GitHub Actions matrix strategy
-   - Handle dependency ordering
+   - ✅ Create PowerShell script to get affected projects
+   - ✅ Integrate with GitHub Actions matrix strategy
+   - ✅ Handle dependency ordering
 
-3. **Create reusable templates**
-   - Build template for .NET projects
-   - Test template for .NET projects
-   - Cache template for NuGet packages
+3. **Create reusable components**
+   - ✅ Load-config composite action
+   - ✅ Setup-environment composite action
+   - ✅ Centralized configuration files
 
 4. **Establish caching strategy**
-   - Configure NuGet package caching
-   - Set up build artifact caching
-   - Implement Nx cache persistence
+   - ✅ Configure NuGet package caching
+   - ✅ Set up build artifact caching
+   - ✅ Implement Nx cache persistence
 
 ### Phase 2: Optimization
 
@@ -216,7 +242,7 @@ This document outlines the comprehensive GitHub Actions build and deployment str
 - Vertical scaling through optimized resource usage
 
 ### Maintainability
-- Reusable templates reduce duplication
+- Reusable components reduce duplication
 - Centralized configuration management
 - Clear separation of concerns
 

@@ -102,18 +102,18 @@ graph TD
 
 **Scenario 1: Library Change**
 ```
-Change: libs/Shared/EchoService.cs
-Affected: Shared (library) + EchoAPI (depends on Shared)
+Change: libs/shared/EchoService.cs
+Affected: shared (library) + echo-api (depends on shared)
 Build: Both projects
-Deploy: EchoAPI only (libraries aren't deployed)
+Deploy: echo-api only (libraries aren't deployed)
 ```
 
 **Scenario 2: App-Only Change**
 ```
-Change: apps/EchoAPI/Program.cs
-Affected: EchoAPI only
-Build: EchoAPI only
-Deploy: EchoAPI only
+Change: apps/echo-api/Program.cs
+Affected: echo-api only
+Build: echo-api only
+Deploy: echo-api only
 ```
 
 **Scenario 3: No Relevant Changes**
@@ -146,6 +146,7 @@ deployment:
   "apps": {
     "echo-api": {
       "type": "webapi",
+      "path": "apps/echo-api",
       "environments": ["dev", "staging", "prod"],
       "deployment": {
         "type": "azure-app-service"

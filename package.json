@@ -4,7 +4,8 @@
   "license": "MIT",
   "scripts": {
     "prepare": "nx g @nx-dotnet/core:restore",
-    "build:shared": "cd libs/Shared && dotnet build"
+    "build": "nx build",
+    "build:shared": "cd libs/shared && dotnet build"
   },
   "private": true,
   "devDependencies": {

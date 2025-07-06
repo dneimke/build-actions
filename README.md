@@ -43,14 +43,14 @@ npx nx --version  # Should show 21.x.x
 # Build the shared library
 npx nx build shared
 
-# Build the EchoAPI
+# Build the echo-api
 npx nx build echo-api
 ```
 
 ### 3. Run the Application
 
 ```bash
-# Start the EchoAPI in development mode
+# Start the echo-api in development mode
 npx nx serve echo-api
 ```
 
@@ -122,12 +122,12 @@ Invoke-RestMethod -Uri "https://localhost:7001/echo/goodbye" -Method Delete -Ski
 ```
 build-actions/
 ├── apps/
-│   └── EchoAPI/              # .NET 8 Web API application
+│   └── echo-api/              # .NET 8 Web API application
 │       ├── Controllers/      # API controllers
 │       ├── Program.cs        # Application entry point
 │       └── EchoAPI.csproj    # Project file
 ├── libs/
-│   └── Shared/              # Shared .NET library
+│   └── shared/              # Shared .NET library
 │       ├── EchoService.cs   # Business logic service
 │       ├── EchoRequest.cs   # Request models
 │       └── Shared.csproj    # Project file
@@ -140,7 +140,12 @@ build-actions/
 
 ## 📚 Documentation
 
-For detailed information about our CI/CD workflows, deployment processes, and GitHub Actions configuration, see the [`.github/README.md`](.github/README.md) file.
+For detailed information about our CI/CD workflows, deployment processes, and GitHub Actions configuration, see the following documentation:
+
+- **[CI/CD Strategy](docs/ci-cd-strategy.md)** - Overview of our CI/CD pipeline and development workflow
+- **[Testing Strategy](docs/ci-pipeline-testing-strategy.md)** - Testing approach and coverage requirements
+- **[Setup Requirements](docs/github-setup-requirements.md)** - GitHub Actions setup and configuration
+- **[Implementation Summary](docs/phase1-implementation-summary.md)** - Current implementation status
 
 ## 🛠 Development Workflow
 
@@ -249,7 +254,7 @@ npx nx build echo-api --configuration=production
 
 ```bash
 # Build Docker image
-docker build -t echo-api ./apps/EchoAPI
+docker build -t echo-api ./apps/echo-api
 
 # Run Docker container
 docker run -p 7001:7001 echo-api

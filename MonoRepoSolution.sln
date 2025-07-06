@@ -5,9 +5,9 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "apps", "apps", "{1787FE1D-075E-9E68-7218-25F1BD1BBEAB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EchoAPI", "apps\EchoAPI\EchoAPI.csproj", "{E4FC2B6A-5C8B-43AB-A6A0-C9CBF624B30D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "echo-api", "apps/echo-api/EchoAPI.csproj", "{E4FC2B6A-5C8B-43AB-A6A0-C9CBF624B30D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared", "libs\Shared\Shared.csproj", "{B6B44976-77FC-4517-BC6E-E2AB45A3537C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "shared", "libs/shared/Shared.csproj", "{B6B44976-77FC-4517-BC6E-E2AB45A3537C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
