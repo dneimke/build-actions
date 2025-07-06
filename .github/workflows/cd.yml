@@ -165,7 +165,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+        project: ${{ needs.consolidate-deployment.outputs.matrix }}
       fail-fast: false
     
     steps:
