@@ -83,6 +83,13 @@ jobs:
         
         echo "✅ Nx restore completed"
 
+    - name: Manually restore shared project
+      run: |
+        echo "Manually restoring shared project..."
+        dotnet restore libs/shared/Shared.csproj
+        
+        echo "✅ Manual restore completed"
+
     - name: Debug project assets
       run: |
         echo "=== DEBUG: Project Assets ==="
