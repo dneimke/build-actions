@@ -248,7 +248,12 @@ jobs:
     if: needs.consolidate-deployment.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}
+      # matrix: ${{ fromJson(needs.consolidate-deployment.outputs.matrix) }}  
+      matrix:
+        project:
+          - name: echo-api
+            path: apps/EchoAPI
+            type: webapi
       fail-fast: false
       # Alternative hardcoded matrix for debugging:
       # matrix:
